@@ -1,6 +1,7 @@
+#include "Precompiled.h"
+
 #include "RenderDevice.h"
 #include "Math.h"
-#include "Utils.h"
 
 //#define CONSOLE
 
@@ -12,9 +13,6 @@ int main()
 }
 
 #else
-
-#define NOMINMAX
-#include "windows.h"
 
 void MainLoop()
 {
@@ -61,7 +59,7 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
     HWND hwnd = CreateWindowEx(
                     0,                              // Optional window styles.
                     CLASS_NAME,                     // Window class
-                    "Learn to Program Windows",     // Window text
+                    "[Debug][Vulkan] Jet Engine",   // Window text
                     WS_OVERLAPPEDWINDOW,            // Window style
 
                     // Size and position

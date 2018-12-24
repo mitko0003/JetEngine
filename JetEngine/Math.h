@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Types.h"
-
 // References:
 // http://reedbeta.com/blog/on-vector-math-libraries/#how-to-simd-and-how-not-to
 // https://github.com/Microsoft/DirectXMath

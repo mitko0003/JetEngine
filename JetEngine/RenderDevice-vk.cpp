@@ -1,16 +1,23 @@
+#include "Precompiled.h"
+
 #include "RenderDevice.h"
 #include "RenderDevice-vk.h"
-
-#include "Utils.h"
 
 // Resources:
 // https://software.intel.com/en-us/articles/api-without-secrets-introduction-to-vulkan-preface
 
-enum
+enum QueueType
 {
 	Graphics,
 	Present
 };
+
+struct
+{
+	VkSwapchainKHR Handle = VK_NULL_HANDLE;
+	VkImage Images[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	VkImageView Views[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+} SwapChain;
 
 static struct 
 {
@@ -18,16 +25,11 @@ static struct
 	VkInstance Instance = VK_NULL_HANDLE;
 	VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
 	VkDevice Device = VK_NULL_HANDLE;
-	VkSurfaceKHR BackBuffer = VK_NULL_HANDLE;
 	VkAllocationCallbacks *Allocator = nullptr;
+	VkSurfaceKHR BackBuffer = VK_NULL_HANDLE;
 
 	VkQueue Queues[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-	struct
-	{
-		VkSwapchainKHR Handle = VK_NULL_HANDLE;
-		VkImage Images[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-		VkImageView Views[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-	} SwapChain;
+	VkCommandPool Pool = VK_NULL_HANDLE;
 } Vulkan;
 
 void InitVulkanLib()
@@ -155,7 +157,7 @@ void InitVulkanDevice()
 	int32 presentQueueIndex = -1;
 
 	DebugPrint<logVerbose>("****** PHYSICAL DEVICES ******\n");
-	for (int32 deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex)
+	for (uint32 deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex)
 	{
 		const auto &physicalDevice = physicalDevices[deviceIndex];
 
@@ -290,13 +292,13 @@ void InitVulkanSwapChain()
 {
 	vkDeviceWaitIdle(Vulkan.Device);
 
-	for (int32 i = 0; i < ArrayLength(Vulkan.SwapChain.Images); ++i) 
+	for (int32 i = 0; i < ArrayLength(SwapChain.Images); ++i) 
 	{
-		if (Vulkan.SwapChain.Images[i] != VK_NULL_HANDLE) 
+		if (SwapChain.Images[i] != VK_NULL_HANDLE) 
 		{
-			vkDestroyImageView(Vulkan.Device, Vulkan.SwapChain.Views[i], Vulkan.Allocator);
-			Vulkan.SwapChain.Images[i] = VK_NULL_HANDLE;
-			Vulkan.SwapChain.Views[i] = VK_NULL_HANDLE;
+			vkDestroyImageView(Vulkan.Device, SwapChain.Views[i], Vulkan.Allocator);
+			SwapChain.Images[i] = VK_NULL_HANDLE;
+			SwapChain.Views[i] = VK_NULL_HANDLE;
 		}
 	}
 
@@ -312,7 +314,7 @@ void InitVulkanSwapChain()
 		if (surfaceFormatsCount == 1 && surfaceFormats[0].format == VK_FORMAT_UNDEFINED)
 			return { VK_FORMAT_B8G8R8A8_UNORM, VK_COLORSPACE_SRGB_NONLINEAR_KHR };
 
-		for (int32 i = 0; i < surfaceFormatsCount; ++i) {
+		for (uint32 i = 0; i < surfaceFormatsCount; ++i) {
 			if (surfaceFormats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
 				ASSERT(surfaceFormats[i].colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 				return surfaceFormats[i];
@@ -354,6 +356,7 @@ void InitVulkanSwapChain()
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
 		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceCapabilities);
 		ASSERT(result == VK_SUCCESS);
+		return surfaceCapabilities.currentTransform;
 	};
 
 	const auto &GetSwapChainPresentMode = []() -> VkPresentModeKHR {
@@ -366,20 +369,20 @@ void InitVulkanSwapChain()
 		ASSERT(result == VK_SUCCESS);
 
 		// MAILBOX is the lowest latency V-Sync enabled mode (something like triple-buffering) so use it if available
-		for (int32 i = 0; i < presentModesCount; ++i) {
+		for (uint32 i = 0; i < presentModesCount; ++i) {
 			if (presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
 				return presentModes[i];
 			}
 		}
 		// IMMEDIATE mode allows us to display frames in a V-Sync independent manner so it can introduce screen tearing
 		// But this mode is the best for benchmarking purposes if we want to check the real number of FPS
-		for (int32 i = 0; i < presentModesCount; ++i) {
+		for (uint32 i = 0; i < presentModesCount; ++i) {
 			if (presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
 				return presentModes[i];
 			}
 		}
 		// FIFO present mode is always available
-		for (int32 i = 0; i < presentModesCount; ++i) {
+		for (uint32 i = 0; i < presentModesCount; ++i) {
 			if (presentModes[i] == VK_PRESENT_MODE_FIFO_KHR) {
 				return presentModes[i];
 			}
@@ -393,7 +396,7 @@ void InitVulkanSwapChain()
 	auto imageUsageFlags = GetSwapChainUsageFlags();
 	auto surfaceTransformFlagBits = GetSwapChainTransform();
 	auto presentMode = GetSwapChainPresentMode();
-	auto prevSwapchain = Vulkan.SwapChain.Handle;
+	auto prevSwapchain = SwapChain.Handle;
 
 	ASSERT(static_cast<int32>(imageUsageFlags) != -1);
 	ASSERT(static_cast<int32>(presentMode) != -1);
@@ -419,25 +422,25 @@ void InitVulkanSwapChain()
 	swapchainCreateInfo.clipped = VK_TRUE;
 	swapchainCreateInfo.oldSwapchain = prevSwapchain;
 
-	VkResult result = vkCreateSwapchainKHR(Vulkan.Device, &swapchainCreateInfo, Vulkan.Allocator, &Vulkan.SwapChain.Handle);
+	VkResult result = vkCreateSwapchainKHR(Vulkan.Device, &swapchainCreateInfo, Vulkan.Allocator, &SwapChain.Handle);
 	ASSERT(result == VK_SUCCESS);
 
 	if (prevSwapchain != VK_NULL_HANDLE)
 		vkDestroySwapchainKHR(Vulkan.Device, prevSwapchain, Vulkan.Allocator);
 
 	uint32 imageCount = 0;
-	result = vkGetSwapchainImagesKHR(Vulkan.Device, Vulkan.SwapChain.Handle, &imageCount, nullptr);
-	ASSERT(result == VK_SUCCESS && imageCount == ArrayLength(Vulkan.SwapChain.Images));
+	result = vkGetSwapchainImagesKHR(Vulkan.Device, SwapChain.Handle, &imageCount, nullptr);
+	ASSERT(result == VK_SUCCESS && imageCount == ArrayLength(SwapChain.Images));
 
-	result = vkGetSwapchainImagesKHR(Vulkan.Device, Vulkan.SwapChain.Handle, &imageCount, Vulkan.SwapChain.Images);
+	result = vkGetSwapchainImagesKHR(Vulkan.Device, SwapChain.Handle, &imageCount, SwapChain.Images);
 	ASSERT(result == VK_SUCCESS);
 
-	for (int32 i = 0; i < ArrayLength(Vulkan.SwapChain.Images); ++i) {
+	for (int32 i = 0; i < ArrayLength(SwapChain.Images); ++i) {
 		VkImageViewCreateInfo imageViewCreateInfo;
 		imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		imageViewCreateInfo.pNext = nullptr;
 		imageViewCreateInfo.flags = 0;
-		imageViewCreateInfo.image = Vulkan.SwapChain.Images[i];
+		imageViewCreateInfo.image = SwapChain.Images[i];
 		imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		imageViewCreateInfo.format = surfaceFormat.format;
 		imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -450,7 +453,258 @@ void InitVulkanSwapChain()
 		imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 		imageViewCreateInfo.subresourceRange.layerCount = 1;
 
-		VkResult result = vkCreateImageView(Vulkan.Device, &imageViewCreateInfo, Vulkan.Allocator, &Vulkan.SwapChain.Views[i]); 
+		VkResult result = vkCreateImageView(Vulkan.Device, &imageViewCreateInfo, Vulkan.Allocator, &SwapChain.Views[i]); 
+		ASSERT(result == VK_SUCCESS);
+	}
+}
+
+void InitVulkanCommandPool()
+{
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.pNext = nullptr;
+	commandPoolCreateInfo.flags = 0;
+	commandPoolCreateInfo.queueFamilyIndex = 0;
+
+	VkResult result = vkCreateCommandPool(Vulkan.Device, &commandPoolCreateInfo, nullptr, &Vulkan.Pool);
+	ASSERT(result == VK_SUCCESS);
+}
+
+VkCommandBuffer CreateCommandBuffer()
+{
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.pNext = nullptr;
+	commandBufferAllocateInfo.commandPool = Vulkan.Pool;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+	VkResult result = vkAllocateCommandBuffers(Vulkan.Device, &commandBufferAllocateInfo, &commandBuffer);
+	ASSERT(result == VK_SUCCESS);
+
+	return commandBuffer;
+}
+
+void DestroyCommandBuffer(VkCommandBuffer commandBuffer)
+{
+	vkFreeCommandBuffers(Vulkan.Device, Vulkan.Pool, 1, &commandBuffer);
+}
+
+VkRenderPass CreateRenderPass()
+{
+	VkAttachmentDescription attachmentDescription = {};
+	attachmentDescription.flags = 0;
+	attachmentDescription.format = VK_FORMAT_B8G8R8A8_UNORM;
+	attachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
+	attachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachmentDescription.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachmentDescription.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference attachmentReference = {};
+	attachmentReference.attachment = 0;
+	attachmentReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpassDescription = {};
+	subpassDescription.flags = 0;
+	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassDescription.inputAttachmentCount = 0;
+	subpassDescription.pInputAttachments = nullptr;
+	subpassDescription.colorAttachmentCount = 1;
+	subpassDescription.pColorAttachments = &attachmentReference;
+	subpassDescription.pResolveAttachments = nullptr;
+	subpassDescription.pDepthStencilAttachment = nullptr;
+	subpassDescription.preserveAttachmentCount = 0;
+	subpassDescription.pPreserveAttachments = nullptr;
+
+	VkRenderPassCreateInfo renderPassCreateInfo = {};
+	renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCreateInfo.pNext = nullptr;
+	renderPassCreateInfo.flags = 0;
+	renderPassCreateInfo.attachmentCount = 1;
+	renderPassCreateInfo.pAttachments = &attachmentDescription;
+	renderPassCreateInfo.subpassCount = 1;
+	renderPassCreateInfo.pSubpasses = &subpassDescription;
+	renderPassCreateInfo.dependencyCount = 0;
+	renderPassCreateInfo.pDependencies = nullptr;
+
+	VkRenderPass renderPass;
+	VkResult result = vkCreateRenderPass(Vulkan.Device, &renderPassCreateInfo, Vulkan.Allocator, &renderPass);
+	ASSERT(result == VK_SUCCESS);
+	return renderPass;
+}
+
+void DestroyRenderPass(VkRenderPass renderPass)
+{
+	vkDestroyRenderPass(Vulkan.Device, renderPass, Vulkan.Allocator);
+}
+
+VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass)
+{
+	VkFramebufferCreateInfo framebufferCreateInfo = {};
+	framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferCreateInfo.pNext = nullptr;
+	framebufferCreateInfo.flags = 0;
+	framebufferCreateInfo.renderPass = renderPass;
+	framebufferCreateInfo.attachmentCount = 1;
+	framebufferCreateInfo.pAttachments = &imageView;
+	framebufferCreateInfo.width = 300;
+	framebufferCreateInfo.height = 300;
+	framebufferCreateInfo.layers = 1;
+
+	VkFramebuffer framebuffer;
+	VkResult result = vkCreateFramebuffer(Vulkan.Device, &framebufferCreateInfo, Vulkan.Allocator, &framebuffer);
+	ASSERT(result == VK_SUCCESS);
+	return framebuffer;
+}
+
+void DestroyFramebuffer(VkFramebuffer framebuffer)
+{
+	vkDestroyFramebuffer(Vulkan.Device, framebuffer, Vulkan.Allocator);
+}
+
+VkSemaphore CreateSemaphore()
+{
+	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreCreateInfo.pNext = nullptr;
+	semaphoreCreateInfo.flags = 0;
+
+	VkSemaphore semaphore;
+	VkResult result = vkCreateSemaphore(Vulkan.Device, &semaphoreCreateInfo, Vulkan.Allocator, &semaphore);
+	ASSERT(result == VK_SUCCESS);
+	return semaphore;
+}
+
+static VkSemaphore renderingFinishedSemaphore = VK_NULL_HANDLE;
+static VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
+
+void ClearColor()
+{
+	uint32_t i;
+	VkResult result = vkAcquireNextImageKHR(Vulkan.Device, SwapChain.Handle, std::numeric_limits<uint64>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
+
+	static VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+	if (commandBuffer != VK_NULL_HANDLE)
+		DestroyCommandBuffer(commandBuffer);
+	commandBuffer = CreateCommandBuffer();
+		
+	VkImageSubresourceRange imageSubresourceRange = {};
+	imageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageSubresourceRange.baseMipLevel = 0;
+	imageSubresourceRange.levelCount = 1;
+	imageSubresourceRange.baseArrayLayer = 0;
+	imageSubresourceRange.layerCount = 1;
+	
+	{
+		VkCommandBufferBeginInfo commandBufferBeginInfo = {};
+		commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		commandBufferBeginInfo.pNext = nullptr;
+		commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+		commandBufferBeginInfo.pInheritanceInfo = nullptr;
+
+		vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+	}
+
+	{
+		VkImageMemoryBarrier imageMemoryBarrier = {};
+		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		imageMemoryBarrier.pNext = nullptr;
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		imageMemoryBarrier.srcQueueFamilyIndex = 0;
+		imageMemoryBarrier.dstQueueFamilyIndex = 0;
+		imageMemoryBarrier.image = SwapChain.Images[i];
+		imageMemoryBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr, 
+			1, &imageMemoryBarrier
+		);
+	}
+
+	{
+		VkClearColorValue clearColorValue = {};
+		clearColorValue.float32[0] = 0.0f;
+		clearColorValue.float32[1] = 1.0f;
+		clearColorValue.float32[2] = 1.0f;
+		clearColorValue.float32[3] = 1.0f;
+
+		vkCmdClearColorImage(
+			commandBuffer, 
+			SwapChain.Images[i], 
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+			&clearColorValue,
+			1, &imageSubresourceRange
+		);
+	}
+
+	{
+		VkImageMemoryBarrier imageMemoryBarrier = {};
+		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		imageMemoryBarrier.pNext = nullptr;
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		imageMemoryBarrier.image = SwapChain.Images[i];
+		imageMemoryBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			0, 
+			0, nullptr, 
+			0, nullptr,
+			1, &imageMemoryBarrier
+		);
+	}
+
+	result = vkEndCommandBuffer(commandBuffer);
+	ASSERT(result == VK_SUCCESS);
+	
+	{
+		VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pNext = nullptr;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
+		submitInfo.pWaitDstStageMask = &wait_dst_stage_mask;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &renderingFinishedSemaphore;
+
+		result = vkQueueSubmit(Vulkan.Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
+		ASSERT(result == VK_SUCCESS);
+	}
+
+	{
+		VkPresentInfoKHR presentInfoKHR = {};
+		presentInfoKHR.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfoKHR.pNext = nullptr;
+		presentInfoKHR.waitSemaphoreCount = 1;
+		presentInfoKHR.pWaitSemaphores = &renderingFinishedSemaphore;
+		presentInfoKHR.swapchainCount = 1;
+		presentInfoKHR.pSwapchains = &SwapChain.Handle;
+		presentInfoKHR.pImageIndices = &i;
+		presentInfoKHR.pResults = nullptr;
+
+		result = vkQueuePresentKHR(Vulkan.Queues[Present], &presentInfoKHR);
 		ASSERT(result == VK_SUCCESS);
 	}
 }
@@ -464,6 +718,11 @@ void Init(HINSTANCE instance, HWND hwnd)
 	InitVulkanSwapChain();
 	vkGetDeviceQueue(Vulkan.Device, 0, 0, &Vulkan.Queues[Graphics]);
 	vkGetDeviceQueue(Vulkan.Device, 0, 0, &Vulkan.Queues[Present]);
+	InitVulkanCommandPool();
+
+	renderingFinishedSemaphore = CreateSemaphore();
+	imageAvailableSemaphore = CreateSemaphore();
+	ClearColor();
 }
 
 void DoneVulkanLib()
@@ -495,8 +754,14 @@ void DoneVulkanSwapChain()
 	// TODO: Move from DoneVulkanSwapChain
 }
 
+void DoneVulkanCommandPool()
+{
+	vkDestroyCommandPool(Vulkan.Device, Vulkan.Pool, Vulkan.Allocator);
+}
+
 void Done()
 {
+	DoneVulkanCommandPool();
 	DoneVulkanSwapChain();
 	DoneVulkanDevice();
 	DoneVukanBackBuffer();

@@ -1,9 +1,5 @@
 #pragma once
 
-#include "Types.h"
-#include <limits>
-#include <type_traits>
-
 template <typename T, typename Deleter>
 struct UniquePtr
 {
@@ -21,7 +17,7 @@ private:
 	T *ptr
 };
 
-template <typename T, typename Deleter>
+template <typename T>
 struct SharedPtr
 {
 	constexpr T* operator->() { return reinterpret_cast<T*>(ptr); }
@@ -30,6 +26,8 @@ private:
 	uint64 ref : 16;
 	uint64 ptr : 48;
 };
+
+static_assert(sizeof(SharedPtr<void>) == sizeof(uint64), "Unexpected size!");
 
 template <typename T, typename underlying, uint8 *pool>
 struct OffsetPtr
