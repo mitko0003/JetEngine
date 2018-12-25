@@ -566,6 +566,238 @@ void DestroyFramebuffer(VkFramebuffer framebuffer)
 	vkDestroyFramebuffer(Vulkan.Device, framebuffer, Vulkan.Allocator);
 }
 
+VkPipelineLayout CreatePipelineLayout()
+{
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
+	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.pNext = nullptr;
+	pipelineLayoutCreateInfo.flags = 0;
+	pipelineLayoutCreateInfo.setLayoutCount = 0;
+	pipelineLayoutCreateInfo.pSetLayouts = nullptr;
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
+	pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
+
+	VkPipelineLayout pipelineLayout;
+	VkResult result = vkCreatePipelineLayout(Vulkan.Device, &pipelineLayoutCreateInfo, Vulkan.Allocator, &pipelineLayout);
+	ASSERT(result == VK_SUCCESS);
+	return pipelineLayout;
+}
+
+void DestroyPipelineLayout(VkPipelineLayout pipelineLayout)
+{
+	vkDestroyPipelineLayout(Vulkan.Device, pipelineLayout, Vulkan.Allocator);
+}
+
+VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size)
+{
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCreateInfo.pNext = nullptr;
+	shaderModuleCreateInfo.flags = 0;
+	shaderModuleCreateInfo.codeSize = size;
+	shaderModuleCreateInfo.pCode = shader;
+
+	VkShaderModule shaderModule;
+	VkResult result = vkCreateShaderModule(Vulkan.Device, &shaderModuleCreateInfo, Vulkan.Allocator, &shaderModule);
+	ASSERT(result == VK_SUCCESS);
+	return shaderModule;
+}
+
+void DestroyShaderModule(VkShaderModule shaderModule)
+{
+	vkDestroyShaderModule(Vulkan.Device, shaderModule, Vulkan.Allocator);
+}
+
+static const char *vertexShader =
+"// Copyright 2016 Intel Corporation All Rights Reserved"
+"// "
+"// Intel makes no representations about the suitability of this software for any purpose."
+"// THIS SOFTWARE IS PROVIDED ""AS IS."" INTEL SPECIFICALLY DISCLAIMS ALL WARRANTIES,"
+"// EXPRESS OR IMPLIED, AND ALL LIABILITY, INCLUDING CONSEQUENTIAL AND OTHER INDIRECT DAMAGES,"
+"// FOR THE USE OF THIS SOFTWARE, INCLUDING LIABILITY FOR INFRINGEMENT OF ANY PROPRIETARY"
+"// RIGHTS, AND INCLUDING THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE."
+"// Intel does not assume any responsibility for any errors which may appear in this software"
+"// nor any responsibility to update it."
+""
+"#version 450"
+""
+"out gl_PerVertex"
+"{"
+"  vec4 gl_Position;"
+"};"
+""
+"void main() {"
+"    vec2 pos[3] = vec2[3]( vec2(-0.7, 0.7), vec2(0.7, 0.7), vec2(0.0, -0.7) );"
+"    gl_Position = vec4( pos[gl_VertexIndex], 0.0, 1.0 );"
+"}";
+
+static const char *fragmentShader =
+"// Copyright 2016 Intel Corporation All Rights Reserved"
+"// "
+"// Intel makes no representations about the suitability of this software for any purpose."
+"// THIS SOFTWARE IS PROVIDED ""AS IS."" INTEL SPECIFICALLY DISCLAIMS ALL WARRANTIES,"
+"// EXPRESS OR IMPLIED, AND ALL LIABILITY, INCLUDING CONSEQUENTIAL AND OTHER INDIRECT DAMAGES,"
+"// FOR THE USE OF THIS SOFTWARE, INCLUDING LIABILITY FOR INFRINGEMENT OF ANY PROPRIETARY"
+"// RIGHTS, AND INCLUDING THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE."
+"// Intel does not assume any responsibility for any errors which may appear in this software"
+"// nor any responsibility to update it."
+""
+"#version 450"
+""
+"layout(location = 0) out vec4 out_Color;"
+""
+"void main() {"
+"  out_Color = vec4( 0.0, 0.4, 1.0, 1.0 );"
+"}";
+
+VkPipeline CreatePipeline(VkRenderPass renderPass)
+{
+	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vertexShader), sizeof(vertexShader));
+	VkShaderModule fragmentShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(fragmentShader), sizeof(fragmentShader));
+
+	VkPipelineShaderStageCreateInfo shaderStageCreateInfo[2];
+	shaderStageCreateInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageCreateInfo[0].pNext = nullptr;
+	shaderStageCreateInfo[0].flags = 0;
+	shaderStageCreateInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderStageCreateInfo[0].module = vertexShaderModule;
+	shaderStageCreateInfo[0].pName = "main";
+	shaderStageCreateInfo[0].pSpecializationInfo = nullptr;
+
+	shaderStageCreateInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageCreateInfo[1].pNext = nullptr;
+	shaderStageCreateInfo[1].flags = 0;
+	shaderStageCreateInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	shaderStageCreateInfo[1].module = fragmentShaderModule;
+	shaderStageCreateInfo[1].pName = "main";
+	shaderStageCreateInfo[1].pSpecializationInfo = nullptr;
+
+	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
+	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputStateCreateInfo.pNext = nullptr;
+	vertexInputStateCreateInfo.flags = 0;
+	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = nullptr;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = nullptr;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
+	inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyStateCreateInfo.pNext = nullptr;
+	inputAssemblyStateCreateInfo.flags = 0;
+	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = 1920u;
+	viewport.height = 1080u;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 0.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset.x = 0u;
+	scissor.offset.x = 0u;
+	scissor.extent.width = 1920u;
+	scissor.extent.height = 1080u;
+
+	VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
+	viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportStateCreateInfo.pNext = nullptr;
+	viewportStateCreateInfo.flags = 0;
+	viewportStateCreateInfo.viewportCount = 1;
+	viewportStateCreateInfo.pViewports = &viewport;
+	viewportStateCreateInfo.scissorCount = 1;
+	viewportStateCreateInfo.pScissors = &scissor;
+
+	VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = {};
+	rasterizationStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizationStateCreateInfo.pNext = nullptr;
+	rasterizationStateCreateInfo.flags = 0;
+	rasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
+	rasterizationStateCreateInfo.rasterizerDiscardEnable = VK_FALSE;
+	rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizationStateCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizationStateCreateInfo.depthBiasEnable = VK_FALSE;
+	rasterizationStateCreateInfo.depthBiasConstantFactor = 0.0f;
+	rasterizationStateCreateInfo.depthBiasClamp = 0.0f;
+	rasterizationStateCreateInfo.depthBiasSlopeFactor = 0.0f;
+	rasterizationStateCreateInfo.lineWidth = 1.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo = {};
+	multisampleStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampleStateCreateInfo.pNext = nullptr;
+	multisampleStateCreateInfo.flags = 0;
+	multisampleStateCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
+	multisampleStateCreateInfo.minSampleShading = 1.0f;
+	multisampleStateCreateInfo.pSampleMask = nullptr;
+	multisampleStateCreateInfo.alphaToCoverageEnable = VK_FALSE;
+	multisampleStateCreateInfo.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachmentState = {};
+	colorBlendAttachmentState.blendEnable = VK_FALSE;
+	colorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+	VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo = {};
+	colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendStateCreateInfo.pNext = nullptr;
+	colorBlendStateCreateInfo.flags = 0;
+	colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
+	colorBlendStateCreateInfo.logicOp = VK_LOGIC_OP_COPY;
+	colorBlendStateCreateInfo.attachmentCount = 1;
+	colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
+	colorBlendStateCreateInfo.blendConstants[0] = 0.0f;
+	colorBlendStateCreateInfo.blendConstants[1] = 0.0f;
+	colorBlendStateCreateInfo.blendConstants[2] = 0.0f;
+	colorBlendStateCreateInfo.blendConstants[3] = 0.0f;
+
+	VkPipelineLayout pipelineLayout = CreatePipelineLayout();
+
+	VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {};
+	graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	graphicsPipelineCreateInfo.pNext = nullptr;
+	graphicsPipelineCreateInfo.flags = 0;
+	graphicsPipelineCreateInfo.stageCount = 2;
+	graphicsPipelineCreateInfo.pStages = shaderStageCreateInfo;
+	graphicsPipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
+	graphicsPipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
+	graphicsPipelineCreateInfo.pTessellationState = nullptr;
+	graphicsPipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
+	graphicsPipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
+	graphicsPipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
+	graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+	graphicsPipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
+	graphicsPipelineCreateInfo.pDynamicState = nullptr;
+	graphicsPipelineCreateInfo.layout = pipelineLayout;
+	graphicsPipelineCreateInfo.renderPass = renderPass;
+	graphicsPipelineCreateInfo.subpass = 0;
+	graphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+	graphicsPipelineCreateInfo.basePipelineIndex = -1;
+
+	VkPipeline graphicsPipeline;
+	VkResult result = vkCreateGraphicsPipelines(Vulkan.Device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, Vulkan.Allocator, &graphicsPipeline);
+	ASSERT(result == VK_SUCCESS);
+
+	DestroyShaderModule(vertexShaderModule);
+	DestroyShaderModule(fragmentShaderModule);
+	DestroyPipelineLayout(pipelineLayout);
+	return graphicsPipeline;
+}
+
+void DestroyPipeline(VkPipeline pipeline)
+{
+	vkDestroyPipeline(Vulkan.Device, pipeline, Vulkan.Allocator);
+}
+
 VkSemaphore CreateSemaphore()
 {
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
@@ -581,6 +813,22 @@ VkSemaphore CreateSemaphore()
 
 static VkSemaphore renderingFinishedSemaphore = VK_NULL_HANDLE;
 static VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
+
+void HelloWorld()
+{
+	uint32_t i;
+	VkResult result = vkAcquireNextImageKHR(Vulkan.Device, SwapChain.Handle, std::numeric_limits<uint64>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
+
+	VkRenderPass renderPass = CreateRenderPass();
+	VkFramebuffer frambuffer = CreateFramebuffer(SwapChain.Views[i], renderPass);
+	VkPipeline pipeline = CreatePipeline(renderPass);
+	VkCommandBuffer commandBuffer = CreateCommandBuffer();
+
+	DestroyCommandBuffer(commandBuffer);
+	DestroyPipeline(pipeline);
+	DestroyFramebuffer(frambuffer);
+	DestroyRenderPass(renderPass);
+}
 
 void ClearColor()
 {
@@ -636,7 +884,7 @@ void ClearColor()
 	{
 		VkClearColorValue clearColorValue = {};
 		clearColorValue.float32[0] = 0.0f;
-		clearColorValue.float32[1] = 1.0f;
+		clearColorValue.float32[1] = i ? 1.0f : 0.0f;
 		clearColorValue.float32[2] = 1.0f;
 		clearColorValue.float32[3] = 1.0f;
 
@@ -722,8 +970,8 @@ void Init(HINSTANCE instance, HWND hwnd)
 
 	renderingFinishedSemaphore = CreateSemaphore();
 	imageAvailableSemaphore = CreateSemaphore();
-	ClearColor();
-}
+	while(true) HelloWorld();
+}	
 
 void DoneVulkanLib()
 {

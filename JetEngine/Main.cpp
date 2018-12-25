@@ -76,8 +76,8 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
         return 0;
     }
 
-	Init(instance, hwnd);
     ShowWindow(hwnd, cmdShow);
+	Init(instance, hwnd);
 
     // Run the message loop.
 
