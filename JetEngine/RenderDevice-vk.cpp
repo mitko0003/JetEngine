@@ -1,7 +1,11 @@
 #include "Precompiled.h"
 
+#include "FileSystem.h"
 #include "RenderDevice.h"
 #include "RenderDevice-vk.h"
+
+static constexpr uint32 WindowWidth = 1000u;
+static constexpr uint32 WindowHeight = 800u;
 
 // Resources:
 // https://software.intel.com/en-us/articles/api-without-secrets-introduction-to-vulkan-preface
@@ -92,9 +96,18 @@ void InitVulkanInstance()
 
 	DebugPrint("****** EXTENSION PROPERTIES ******\n");
 	for (uint32 i = 0; i < uPropertyCount; ++i)
-	{
-		DebugPrint("VkExtensionProperty(%d): %s(%d)\n", i, extensions[i].extensionName, extensions[i].specVersion);
-	}
+		DebugPrint("VkExtensionProperty: %s(%d)\n", extensions[i].extensionName, extensions[i].specVersion);
+
+	uPropertyCount = 0;
+	result = vkEnumerateInstanceLayerProperties(&uPropertyCount, nullptr);
+	ASSERT(result == VK_SUCCESS);
+	VkLayerProperties* layers = ALLOCA(VkLayerProperties, uPropertyCount);
+	result = vkEnumerateInstanceLayerProperties(&uPropertyCount, layers);
+	ASSERT(result == VK_SUCCESS);
+
+	DebugPrint("****** LAYER PROPERTIES ******\n");
+	for (uint32 i = 0; i < uPropertyCount; ++i)
+		DebugPrint("vkEnumerateInstanceLayerProperties: %s(%d)\n", layers[i].layerName, layers[i].specVersion);
 
 	const char* needed[] = {
 		VK_KHR_SURFACE_EXTENSION_NAME,
@@ -111,13 +124,18 @@ void InitVulkanInstance()
 	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
-	VkInstanceCreateInfo instanceCreateInfo;
+	const char* layerNames[] = {
+		"VK_LAYER_LUNARG_core_validation",
+		"VK_LAYER_LUNARG_parameter_validation"
+	};
+
+	VkInstanceCreateInfo instanceCreateInfo = {};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pNext = nullptr;
 	instanceCreateInfo.flags = 0;
 	instanceCreateInfo.pApplicationInfo = &applicationInfo;
-	instanceCreateInfo.enabledLayerCount = 0;
-	instanceCreateInfo.ppEnabledLayerNames = nullptr;
+	instanceCreateInfo.enabledLayerCount = ArrayLength(layerNames);
+	instanceCreateInfo.ppEnabledLayerNames = layerNames;
 	instanceCreateInfo.enabledExtensionCount = ArrayLength(needed);
 	instanceCreateInfo.ppEnabledExtensionNames = needed;
 
@@ -240,7 +258,7 @@ void InitVulkanDevice()
 
 	float32 queuePriorities[] = { 1.0f };
 
-	VkDeviceQueueCreateInfo deviceQueueCreateInfo;
+	VkDeviceQueueCreateInfo deviceQueueCreateInfo = {};
 	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	deviceQueueCreateInfo.pNext = nullptr;
 	deviceQueueCreateInfo.flags = 0;
@@ -252,7 +270,7 @@ void InitVulkanDevice()
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
 
-	VkDeviceCreateInfo deviceCreateInfo;
+	VkDeviceCreateInfo deviceCreateInfo = {};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = nullptr;
 	deviceCreateInfo.queueCreateInfoCount = 1;
@@ -331,9 +349,9 @@ void InitVulkanSwapChain()
 		ASSERT(result == VK_SUCCESS);
 
 		if (surfaceCapabilities.currentExtent.width == -1) {
-			VkExtent2D swapChainExtent = {
-				Clamp(1920u, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width),
-				Clamp(1080u, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
+			return VkExtent2D {
+				Clamp(WindowWidth, surfaceCapabilities.minImageExtent.width, surfaceCapabilities.maxImageExtent.width),
+				Clamp(WindowHeight, surfaceCapabilities.minImageExtent.height, surfaceCapabilities.maxImageExtent.height)
 			};
 		}
 
@@ -531,7 +549,7 @@ VkRenderPass CreateRenderPass()
 	renderPassCreateInfo.dependencyCount = 0;
 	renderPassCreateInfo.pDependencies = nullptr;
 
-	VkRenderPass renderPass;
+	VkRenderPass renderPass = VK_NULL_HANDLE;
 	VkResult result = vkCreateRenderPass(Vulkan.Device, &renderPassCreateInfo, Vulkan.Allocator, &renderPass);
 	ASSERT(result == VK_SUCCESS);
 	return renderPass;
@@ -551,11 +569,11 @@ VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass)
 	framebufferCreateInfo.renderPass = renderPass;
 	framebufferCreateInfo.attachmentCount = 1;
 	framebufferCreateInfo.pAttachments = &imageView;
-	framebufferCreateInfo.width = 300;
-	framebufferCreateInfo.height = 300;
+	framebufferCreateInfo.width = WindowWidth;
+	framebufferCreateInfo.height = WindowHeight;
 	framebufferCreateInfo.layers = 1;
 
-	VkFramebuffer framebuffer;
+	VkFramebuffer framebuffer = VK_NULL_HANDLE;
 	VkResult result = vkCreateFramebuffer(Vulkan.Device, &framebufferCreateInfo, Vulkan.Allocator, &framebuffer);
 	ASSERT(result == VK_SUCCESS);
 	return framebuffer;
@@ -577,7 +595,7 @@ VkPipelineLayout CreatePipelineLayout()
 	pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
 	pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
 
-	VkPipelineLayout pipelineLayout;
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 	VkResult result = vkCreatePipelineLayout(Vulkan.Device, &pipelineLayoutCreateInfo, Vulkan.Allocator, &pipelineLayout);
 	ASSERT(result == VK_SUCCESS);
 	return pipelineLayout;
@@ -588,6 +606,9 @@ void DestroyPipelineLayout(VkPipelineLayout pipelineLayout)
 	vkDestroyPipelineLayout(Vulkan.Device, pipelineLayout, Vulkan.Allocator);
 }
 
+//dxc.exe -spirv -fspv-target-env=vulkan1.1 -T vs_6_0 -E VS_main HelloTriangle.vs.hlsl -Fo HelloTriangle.vs.spirv
+//dxc.exe -spirv -fspv-target-env=vulkan1.1 -T ps_6_0 -E PS_main HelloTriangle.ps.hlsl -Fo HelloTriangle.ps.spirv
+
 VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size)
 {
 	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
@@ -597,7 +618,7 @@ VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size)
 	shaderModuleCreateInfo.codeSize = size;
 	shaderModuleCreateInfo.pCode = shader;
 
-	VkShaderModule shaderModule;
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
 	VkResult result = vkCreateShaderModule(Vulkan.Device, &shaderModuleCreateInfo, Vulkan.Allocator, &shaderModule);
 	ASSERT(result == VK_SUCCESS);
 	return shaderModule;
@@ -608,52 +629,14 @@ void DestroyShaderModule(VkShaderModule shaderModule)
 	vkDestroyShaderModule(Vulkan.Device, shaderModule, Vulkan.Allocator);
 }
 
-static const char *vertexShader =
-"// Copyright 2016 Intel Corporation All Rights Reserved"
-"// "
-"// Intel makes no representations about the suitability of this software for any purpose."
-"// THIS SOFTWARE IS PROVIDED ""AS IS."" INTEL SPECIFICALLY DISCLAIMS ALL WARRANTIES,"
-"// EXPRESS OR IMPLIED, AND ALL LIABILITY, INCLUDING CONSEQUENTIAL AND OTHER INDIRECT DAMAGES,"
-"// FOR THE USE OF THIS SOFTWARE, INCLUDING LIABILITY FOR INFRINGEMENT OF ANY PROPRIETARY"
-"// RIGHTS, AND INCLUDING THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE."
-"// Intel does not assume any responsibility for any errors which may appear in this software"
-"// nor any responsibility to update it."
-""
-"#version 450"
-""
-"out gl_PerVertex"
-"{"
-"  vec4 gl_Position;"
-"};"
-""
-"void main() {"
-"    vec2 pos[3] = vec2[3]( vec2(-0.7, 0.7), vec2(0.7, 0.7), vec2(0.0, -0.7) );"
-"    gl_Position = vec4( pos[gl_VertexIndex], 0.0, 1.0 );"
-"}";
-
-static const char *fragmentShader =
-"// Copyright 2016 Intel Corporation All Rights Reserved"
-"// "
-"// Intel makes no representations about the suitability of this software for any purpose."
-"// THIS SOFTWARE IS PROVIDED ""AS IS."" INTEL SPECIFICALLY DISCLAIMS ALL WARRANTIES,"
-"// EXPRESS OR IMPLIED, AND ALL LIABILITY, INCLUDING CONSEQUENTIAL AND OTHER INDIRECT DAMAGES,"
-"// FOR THE USE OF THIS SOFTWARE, INCLUDING LIABILITY FOR INFRINGEMENT OF ANY PROPRIETARY"
-"// RIGHTS, AND INCLUDING THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE."
-"// Intel does not assume any responsibility for any errors which may appear in this software"
-"// nor any responsibility to update it."
-""
-"#version 450"
-""
-"layout(location = 0) out vec4 out_Color;"
-""
-"void main() {"
-"  out_Color = vec4( 0.0, 0.4, 1.0, 1.0 );"
-"}";
-
 VkPipeline CreatePipeline(VkRenderPass renderPass)
 {
-	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vertexShader), sizeof(vertexShader));
-	VkShaderModule fragmentShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(fragmentShader), sizeof(fragmentShader));
+	FS::File ps = FS::Open("Test/HelloTriangle.ps.spirv");
+	FS::File vs = FS::Open("Test/HelloTriangle.vs.spirv");
+	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vs.pBuf), vs.uSize);
+	VkShaderModule pixelShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(ps.pBuf), ps.uSize);
+	FS::Close(ps);
+	FS::Close(vs);
 
 	VkPipelineShaderStageCreateInfo shaderStageCreateInfo[2];
 	shaderStageCreateInfo[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -661,15 +644,15 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	shaderStageCreateInfo[0].flags = 0;
 	shaderStageCreateInfo[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
 	shaderStageCreateInfo[0].module = vertexShaderModule;
-	shaderStageCreateInfo[0].pName = "main";
+	shaderStageCreateInfo[0].pName = "VS_main";
 	shaderStageCreateInfo[0].pSpecializationInfo = nullptr;
 
 	shaderStageCreateInfo[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	shaderStageCreateInfo[1].pNext = nullptr;
 	shaderStageCreateInfo[1].flags = 0;
 	shaderStageCreateInfo[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	shaderStageCreateInfo[1].module = fragmentShaderModule;
-	shaderStageCreateInfo[1].pName = "main";
+	shaderStageCreateInfo[1].module = pixelShaderModule;
+	shaderStageCreateInfo[1].pName = "PS_main";
 	shaderStageCreateInfo[1].pSpecializationInfo = nullptr;
 
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
@@ -691,16 +674,16 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = 1920u;
-	viewport.height = 1080u;
+	viewport.width = WindowWidth;
+	viewport.height = WindowHeight;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 0.0f;
 
 	VkRect2D scissor = {};
 	scissor.offset.x = 0u;
 	scissor.offset.x = 0u;
-	scissor.extent.width = 1920u;
-	scissor.extent.height = 1080u;
+	scissor.extent.width = WindowWidth;
+	scissor.extent.height = WindowHeight;
 
 	VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
 	viewportStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -760,13 +743,42 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	colorBlendStateCreateInfo.blendConstants[2] = 0.0f;
 	colorBlendStateCreateInfo.blendConstants[3] = 0.0f;
 
+	VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo = {};
+	depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencilStateCreateInfo.pNext = nullptr;
+	depthStencilStateCreateInfo.flags = 0;
+	depthStencilStateCreateInfo.depthTestEnable = VK_FALSE;
+	depthStencilStateCreateInfo.depthWriteEnable = VK_FALSE;
+	depthStencilStateCreateInfo.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+	depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
+	depthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
+
+	depthStencilStateCreateInfo.front.failOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.front.passOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.front.depthFailOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.front.compareOp = VK_COMPARE_OP_ALWAYS;
+	depthStencilStateCreateInfo.front.compareMask = 0u;
+	depthStencilStateCreateInfo.front.writeMask = 0u;
+	depthStencilStateCreateInfo.front.reference = 0u;
+
+	depthStencilStateCreateInfo.back.failOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.back.passOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.back.depthFailOp = VK_STENCIL_OP_KEEP;
+	depthStencilStateCreateInfo.back.compareOp = VK_COMPARE_OP_ALWAYS;
+	depthStencilStateCreateInfo.back.compareMask = 0u;
+	depthStencilStateCreateInfo.back.writeMask = 0u;
+	depthStencilStateCreateInfo.back.reference = 0u;
+
+	depthStencilStateCreateInfo.minDepthBounds = 0.0f;
+	depthStencilStateCreateInfo.maxDepthBounds = 1.0f;
+
 	VkPipelineLayout pipelineLayout = CreatePipelineLayout();
 
 	VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo = {};
 	graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	graphicsPipelineCreateInfo.pNext = nullptr;
 	graphicsPipelineCreateInfo.flags = 0;
-	graphicsPipelineCreateInfo.stageCount = 2;
+	graphicsPipelineCreateInfo.stageCount = ArrayLength(shaderStageCreateInfo);
 	graphicsPipelineCreateInfo.pStages = shaderStageCreateInfo;
 	graphicsPipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
 	graphicsPipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
@@ -774,7 +786,7 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	graphicsPipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
 	graphicsPipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
 	graphicsPipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
-	graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+	graphicsPipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
 	graphicsPipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
 	graphicsPipelineCreateInfo.pDynamicState = nullptr;
 	graphicsPipelineCreateInfo.layout = pipelineLayout;
@@ -783,12 +795,12 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	graphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 	graphicsPipelineCreateInfo.basePipelineIndex = -1;
 
-	VkPipeline graphicsPipeline;
+	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
 	VkResult result = vkCreateGraphicsPipelines(Vulkan.Device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, Vulkan.Allocator, &graphicsPipeline);
 	ASSERT(result == VK_SUCCESS);
 
 	DestroyShaderModule(vertexShaderModule);
-	DestroyShaderModule(fragmentShaderModule);
+	DestroyShaderModule(pixelShaderModule);
 	DestroyPipelineLayout(pipelineLayout);
 	return graphicsPipeline;
 }
@@ -805,7 +817,7 @@ VkSemaphore CreateSemaphore()
 	semaphoreCreateInfo.pNext = nullptr;
 	semaphoreCreateInfo.flags = 0;
 
-	VkSemaphore semaphore;
+	VkSemaphore semaphore = VK_NULL_HANDLE;
 	VkResult result = vkCreateSemaphore(Vulkan.Device, &semaphoreCreateInfo, Vulkan.Allocator, &semaphore);
 	ASSERT(result == VK_SUCCESS);
 	return semaphore;
@@ -820,13 +832,140 @@ void HelloWorld()
 	VkResult result = vkAcquireNextImageKHR(Vulkan.Device, SwapChain.Handle, std::numeric_limits<uint64>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
 
 	VkRenderPass renderPass = CreateRenderPass();
-	VkFramebuffer frambuffer = CreateFramebuffer(SwapChain.Views[i], renderPass);
+	VkFramebuffer framebuffer = CreateFramebuffer(SwapChain.Views[i], renderPass);
 	VkPipeline pipeline = CreatePipeline(renderPass);
 	VkCommandBuffer commandBuffer = CreateCommandBuffer();
 
+	VkImageSubresourceRange imageSubresourceRange = {};
+	imageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	imageSubresourceRange.baseMipLevel = 0;
+	imageSubresourceRange.levelCount = 1;
+	imageSubresourceRange.baseArrayLayer = 0;
+	imageSubresourceRange.layerCount = 1;
+
+	{
+		VkCommandBufferBeginInfo commandBufferBeginInfo = {};
+		commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		commandBufferBeginInfo.pNext = nullptr;
+		commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+		commandBufferBeginInfo.pInheritanceInfo = nullptr;
+
+		vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+	}
+
+	{
+		VkImageMemoryBarrier imageMemoryBarrier = {};
+		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		imageMemoryBarrier.pNext = nullptr;
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		imageMemoryBarrier.srcQueueFamilyIndex = 0;
+		imageMemoryBarrier.dstQueueFamilyIndex = 0;
+		imageMemoryBarrier.image = SwapChain.Images[i];
+		imageMemoryBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &imageMemoryBarrier
+		);
+	}
+
+	{
+		VkClearValue clearValue = {};
+		clearValue.color.float32[0] = 0.0f;
+		clearValue.color.float32[1] = 0.0f;
+		clearValue.color.float32[2] = 1.0f;
+		clearValue.color.float32[3] = 1.0f;
+		clearValue.depthStencil.depth = 0.0f;
+		clearValue.depthStencil.stencil = 0u;
+
+		VkRenderPassBeginInfo renderPassBeginInfo = {};
+		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderPassBeginInfo.pNext = nullptr;
+		renderPassBeginInfo.renderPass = renderPass;
+		renderPassBeginInfo.framebuffer = framebuffer;
+		renderPassBeginInfo.renderArea.offset.x = 0u;
+		renderPassBeginInfo.renderArea.offset.y = 0u;
+		renderPassBeginInfo.renderArea.extent.width = WindowWidth;
+		renderPassBeginInfo.renderArea.extent.height = WindowHeight;
+		renderPassBeginInfo.clearValueCount = 1;
+		renderPassBeginInfo.pClearValues = &clearValue;
+
+		vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+	}
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdEndRenderPass(commandBuffer);
+
+	{
+		VkImageMemoryBarrier imageMemoryBarrier = {};
+		imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		imageMemoryBarrier.pNext = nullptr;
+		imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		imageMemoryBarrier.image = SwapChain.Images[i];
+		imageMemoryBarrier.subresourceRange = imageSubresourceRange;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			0,
+			0, nullptr,
+			0, nullptr,
+			1, &imageMemoryBarrier
+		);
+	}
+
+	vkEndCommandBuffer(commandBuffer);
+
+	{
+		VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.pNext = nullptr;
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
+		submitInfo.pWaitDstStageMask = &wait_dst_stage_mask;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &commandBuffer;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &renderingFinishedSemaphore;
+
+		result = vkQueueSubmit(Vulkan.Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
+		ASSERT(result == VK_SUCCESS);
+	}
+	
+	{
+		VkPresentInfoKHR presentInfoKHR = {};
+		presentInfoKHR.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfoKHR.pNext = nullptr;
+		presentInfoKHR.waitSemaphoreCount = 1;
+		presentInfoKHR.pWaitSemaphores = &renderingFinishedSemaphore;
+		presentInfoKHR.swapchainCount = 1;
+		presentInfoKHR.pSwapchains = &SwapChain.Handle;
+		presentInfoKHR.pImageIndices = &i;
+		presentInfoKHR.pResults = nullptr;
+
+		result = vkQueuePresentKHR(Vulkan.Queues[Present], &presentInfoKHR);
+		ASSERT(result == VK_SUCCESS);
+	}
+
 	DestroyCommandBuffer(commandBuffer);
 	DestroyPipeline(pipeline);
-	DestroyFramebuffer(frambuffer);
+	DestroyFramebuffer(framebuffer);
 	DestroyRenderPass(renderPass);
 }
 

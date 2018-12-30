@@ -43,7 +43,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdShow)
 {
     // Register the window class.
-	DebugPrint("Start\n");
+	char cwd[2048];
+	GetCurrentDirectory(sizeof(cwd), cwd);
+	DebugPrint<logVerbose>("CWD: %s\n", cwd);
     const char CLASS_NAME[] = "Jet Engine";
 	
     WNDCLASS wc = { };
@@ -63,7 +65,7 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
                     WS_OVERLAPPEDWINDOW,            // Window style
 
                     // Size and position
-                    CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                    0, 0, 1920, 1080,
 
                     NULL,       // Parent window
                     NULL,       // Menu
@@ -77,10 +79,10 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
     }
 
     ShowWindow(hwnd, cmdShow);
+	UpdateWindow(hwnd);
 	Init(instance, hwnd);
 
     // Run the message loop.
-
     MSG msg = { };
     while (GetMessage(&msg, NULL, 0, 0))
     {
