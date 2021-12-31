@@ -13,6 +13,18 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="External">
+      <UniqueIdentifier>{d601d5b6-ff5f-4efa-aae3-bb3928da0d87}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\tiny_obj_loader">
+      <UniqueIdentifier>{6da5f282-2442-403a-a4bb-bbeb1907409d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\std">
+      <UniqueIdentifier>{66cdbfc3-4b12-40d1-b707-2c36ceaab91b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\std">
+      <UniqueIdentifier>{5e699b4b-21b8-42ea-8a06-2b01274c5f01}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -23,6 +35,12 @@
     </ClCompile>
     <ClCompile Include="FileSystem-nt.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\External\tinyobjloader\tiny_obj_loader.cc">
+      <Filter>External\tiny_obj_loader</Filter>
+    </ClCompile>
+    <ClCompile Include="String.cpp">
+      <Filter>Source Files\std</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -41,9 +59,6 @@
     <ClInclude Include="VulkanFunctions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SmartPointers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -58,6 +73,30 @@
     </ClInclude>
     <ClInclude Include="RenderDevice.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\External\tinyobjloader\tiny_obj_loader.h">
+      <Filter>External\tiny_obj_loader</Filter>
+    </ClInclude>
+    <ClInclude Include="FileSystem-nt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SmartPointers.h">
+      <Filter>Header Files\std</Filter>
+    </ClInclude>
+    <ClInclude Include="String.h">
+      <Filter>Header Files\std</Filter>
+    </ClInclude>
+    <ClInclude Include="Utility.h">
+      <Filter>Header Files\std</Filter>
+    </ClInclude>
+    <ClInclude Include="TypeTraits.h">
+      <Filter>Header Files\std</Filter>
+    </ClInclude>
+    <ClInclude Include="Limits.h">
+      <Filter>Header Files\std</Filter>
+    </ClInclude>
+    <ClInclude Include="Tuple.h">
+      <Filter>Header Files\std</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

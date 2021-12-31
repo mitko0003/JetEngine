@@ -1,11 +1,11 @@
 #pragma once
 
-void* operator new(std::size_t) {
+void* operator new(size_t) {
 	ASSERT(!"Not implemented!");
 	return nullptr;
 }
 
-void* operator new[](std::size_t) {
+void* operator new[](size_t) {
 	ASSERT(!"Not implemented!");
 	return nullptr;
 }

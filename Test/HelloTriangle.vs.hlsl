@@ -1,10 +1,9 @@
-float4 VS_main(in uint VertexIdx : SV_VertexID) : SV_POSITION
+struct VS_input
 {
-	float2 position[3] = {
-		float2(-0.7f, 0.7f), 
-		float2( 0.7f, 0.7f), 
-		float2( 0.0f,-0.7f)
-	};
+	float2 pos : POSITION;
+};
 
-	return float4( position[VertexIdx], 0.0f, 1.0f );
+float4 VS_main(in VS_input input) : SV_POSITION
+{
+	return float4( input.pos, 0.0f, 1.0f );
 }

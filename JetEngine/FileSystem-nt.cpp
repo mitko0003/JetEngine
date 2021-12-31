@@ -4,26 +4,52 @@
 
 namespace FS
 {
-	File Open(const char *path)
+	File Open(const char *path, AccessMode accessMode)
 	{
 		File file;
-		file.hFile = CreateFile(path, GENERIC_READ, FILE_ATTRIBUTE_READONLY, NULL, OPEN_EXISTING, NULL, NULL);
+		FileNT &fileNT = file.Platform;
+		
+		{
+			DWORD dwDesiredAccess = 0;
+			if (accessMode & AccessMode::Read)    dwDesiredAccess |= GENERIC_READ;
+			if (accessMode & AccessMode::Write)   dwDesiredAccess |= GENERIC_WRITE;
+			if (accessMode & AccessMode::Execute) dwDesiredAccess |= GENERIC_EXECUTE;
 
-		file.hMapFile = CreateFileMapping(file.hFile, 0, PAGE_READONLY, 0, 0, nullptr);
+			fileNT.Descriptor = CreateFile(path, dwDesiredAccess, FILE_ATTRIBUTE_READONLY, NULL, OPEN_EXISTING, NULL, NULL);
+		}
 
-		ASSERT(file.hMapFile != NULL && file.hMapFile != INVALID_HANDLE_VALUE);
+		{
+			DWORD flProtect = PAGE_NOACCESS;
+			if (accessMode & AccessMode::Read)    flProtect = PAGE_READONLY;
+			if (accessMode & AccessMode::Write)   flProtect = PAGE_READWRITE;
+			if (accessMode & AccessMode::Execute) flProtect = PAGE_EXECUTE;
+			if (accessMode & AccessMode::Execute && accessMode & AccessMode::Read)  flProtect = PAGE_EXECUTE_READ;
+			if (accessMode & AccessMode::Execute && accessMode & AccessMode::Write) flProtect = PAGE_EXECUTE_READWRITE;
 
-		GetFileSizeEx(file.hFile, reinterpret_cast<PLARGE_INTEGER>(&file.uSize));
-		file.pBuf = MapViewOfFile(file.hMapFile, FILE_MAP_READ, 0, 0, 0);
+			fileNT.Mapping = CreateFileMapping(fileNT.Descriptor, 0, flProtect, 0, 0, nullptr);
+			ASSERT(fileNT.Mapping != NULL && fileNT.Mapping != INVALID_HANDLE_VALUE);
+		}
 
-		ASSERT(file.pBuf != nullptr);
+		GetFileSizeEx(fileNT.Descriptor, reinterpret_cast<PLARGE_INTEGER>(&file.Size));
+
+		{
+			DWORD dwDesiredAccess = 0;
+			if (accessMode & AccessMode::Read)    dwDesiredAccess |= FILE_MAP_READ;
+			if (accessMode & AccessMode::Write)   dwDesiredAccess |= FILE_MAP_WRITE;
+			if (accessMode & AccessMode::Execute) dwDesiredAccess |= FILE_MAP_EXECUTE;
+
+			fileNT.Buffer = MapViewOfFile(fileNT.Mapping, dwDesiredAccess, 0, 0, 0);
+		}
+
+		ASSERT(fileNT.Buffer != nullptr);
 		return file;
 	}
 
 	void Close(File file)
 	{
-		UnmapViewOfFile(file.pBuf);
-		CloseHandle(file.hMapFile);
-		CloseHandle(file.hFile);
+		const FileNT &fileNT = file.Platform;
+		UnmapViewOfFile(fileNT.Buffer);
+		CloseHandle(fileNT.Mapping);
+		CloseHandle(fileNT.Descriptor);
 	}
 }

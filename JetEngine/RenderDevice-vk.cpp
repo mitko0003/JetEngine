@@ -16,32 +16,12 @@ enum QueueType
 	Present
 };
 
-struct
+void TVulkanAPI::InitLib()
 {
-	VkSwapchainKHR Handle = VK_NULL_HANDLE;
-	VkImage Images[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-	VkImageView Views[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-} SwapChain;
+    Library = LoadLibrary("vulkan-1.dll");
+    ASSERT(Library != nullptr);
 
-static struct 
-{
-	LibraryType Library = VK_NULL_HANDLE;
-	VkInstance Instance = VK_NULL_HANDLE;
-	VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
-	VkDevice Device = VK_NULL_HANDLE;
-	VkAllocationCallbacks *Allocator = nullptr;
-	VkSurfaceKHR BackBuffer = VK_NULL_HANDLE;
-
-	VkQueue Queues[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-	VkCommandPool Pool = VK_NULL_HANDLE;
-} Vulkan;
-
-void InitVulkanLib()
-{
-    Vulkan.Library = LoadLibrary("vulkan-1.dll");
-    ASSERT(Vulkan.Library != nullptr);
-
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(Vulkan.Library, "vkGetInstanceProcAddr"));
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(Library, "vkGetInstanceProcAddr"));
 
 #define VK_GLOBAL_LEVEL_FUNCTION(name) PFN_##name name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(nullptr, #name)); ASSERT(name != nullptr)
 #	include "VulkanFunctions.h"
@@ -85,7 +65,7 @@ VkAllocationCallbacks GetVulkanAllocator()
 	return allocationCallbacks;
 }
 
-void InitVulkanInstance()
+void TVulkanAPI::InitInstance()
 {
 	uint32 uPropertyCount;
 	VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &uPropertyCount, nullptr);
@@ -125,8 +105,7 @@ void InitVulkanInstance()
 	applicationInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
 	const char* layerNames[] = {
-		"VK_LAYER_LUNARG_core_validation",
-		"VK_LAYER_LUNARG_parameter_validation"
+		"VK_LAYER_KHRONOS_validation",
 	};
 
 	VkInstanceCreateInfo instanceCreateInfo = {};
@@ -139,15 +118,15 @@ void InitVulkanInstance()
 	instanceCreateInfo.enabledExtensionCount = ArrayLength(needed);
 	instanceCreateInfo.ppEnabledExtensionNames = needed;
 
-	result = vkCreateInstance(&instanceCreateInfo, Vulkan.Allocator, &Vulkan.Instance);
+	result = vkCreateInstance(&instanceCreateInfo, Allocator, &Instance);
 	ASSERT(result == VK_SUCCESS);
 
-#define VK_INSTANCE_LEVEL_FUNCTION(name) PFN_##name name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(Vulkan.Instance, #name)); ASSERT(name != nullptr)
+#define VK_INSTANCE_LEVEL_FUNCTION(name) PFN_##name name = reinterpret_cast<PFN_##name>(vkGetInstanceProcAddr(Instance, #name)); ASSERT(name != nullptr)
 #	include "VulkanFunctions.h"
 #undef VK_INSTANCE_LEVEL_FUNCTION
 }
 
-void InitVulkanBackBuffer(HINSTANCE instance, HWND hwnd)
+void TVulkanAPI::InitBackBuffer(HINSTANCE instance, HWND hwnd)
 {
 	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo;
 	win32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -156,18 +135,18 @@ void InitVulkanBackBuffer(HINSTANCE instance, HWND hwnd)
 	win32SurfaceCreateInfo.hinstance = instance;
 	win32SurfaceCreateInfo.hwnd = hwnd;
 
-	VkResult result = vkCreateWin32SurfaceKHR(Vulkan.Instance, &win32SurfaceCreateInfo, Vulkan.Allocator, &Vulkan.BackBuffer);
+	VkResult result = vkCreateWin32SurfaceKHR(Instance, &win32SurfaceCreateInfo, Allocator, &BackBuffer);
 	ASSERT(result == VK_SUCCESS);
 }
 
-void InitVulkanDevice()
+void TVulkanAPI::InitDevice()
 {
 	uint32 deviceCount;
-	VkResult result = vkEnumeratePhysicalDevices(Vulkan.Instance, &deviceCount, nullptr);
+	VkResult result = vkEnumeratePhysicalDevices(Instance, &deviceCount, nullptr);
 	ASSERT(result == VK_SUCCESS);
 
 	VkPhysicalDevice *physicalDevices = ALLOCA(VkPhysicalDevice, deviceCount);
-	result = vkEnumeratePhysicalDevices(Vulkan.Instance, &deviceCount, physicalDevices);
+	result = vkEnumeratePhysicalDevices(Instance, &deviceCount, physicalDevices);
 	ASSERT(result == VK_SUCCESS);
 
 	int32 physicalDeviceIndex = -1;
@@ -226,7 +205,7 @@ void InitVulkanDevice()
 			const auto &queueFamily = queueFamilyProperties[familyIndex];
 
 			VkBool32 presentQueueSupport;
-			result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, familyIndex, Vulkan.BackBuffer, &presentQueueSupport);
+			result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, familyIndex, BackBuffer, &presentQueueSupport);
 			ASSERT(result == VK_SUCCESS);
 
 			DebugPrint<logVerbose>("Queue %d: \n", familyIndex);
@@ -281,10 +260,10 @@ void InitVulkanDevice()
 	deviceCreateInfo.ppEnabledExtensionNames = extensions;
 	deviceCreateInfo.pEnabledFeatures = nullptr;
 
-	Vulkan.PhysicalDevice = physicalDevices[physicalDeviceIndex];
+	PhysicalDevice = physicalDevices[physicalDeviceIndex];
 
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
-	result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceCapabilities);
+	result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, BackBuffer, &surfaceCapabilities);
 	ASSERT(result == VK_SUCCESS);
 
 	DebugPrint<logVerbose>("BackBufferSurfaceCapabilities.supportedUsageFlags = {\n");
@@ -298,35 +277,35 @@ void InitVulkanDevice()
 	DebugPrint<logVerbose>("	VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT         = %s\n", surfaceCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT ? "true" : "false");
 	DebugPrint<logVerbose>("}\n");
 
-	result = vkCreateDevice(Vulkan.PhysicalDevice, &deviceCreateInfo, Vulkan.Allocator, &Vulkan.Device);
+	result = vkCreateDevice(PhysicalDevice, &deviceCreateInfo, Allocator, &Device);
 	ASSERT(result == VK_SUCCESS);
 
-#define VK_DEVICE_LEVEL_FUNCTION(name) PFN_##name name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(Vulkan.Device, #name)); ASSERT(name != nullptr)
+#define VK_DEVICE_LEVEL_FUNCTION(name) PFN_##name name = reinterpret_cast<PFN_##name>(vkGetDeviceProcAddr(Device, #name)); ASSERT(name != nullptr)
 #	include "VulkanFunctions.h"
 #undef VK_DEVICE_LEVEL_FUNCTION
 }
 
-void InitVulkanSwapChain() 
+void TVulkanAPI::InitSwapChain()
 {
-	vkDeviceWaitIdle(Vulkan.Device);
+	vkDeviceWaitIdle(Device);
 
 	for (int32 i = 0; i < ArrayLength(SwapChain.Images); ++i) 
 	{
 		if (SwapChain.Images[i] != VK_NULL_HANDLE) 
 		{
-			vkDestroyImageView(Vulkan.Device, SwapChain.Views[i], Vulkan.Allocator);
+			vkDestroyImageView(Device, SwapChain.Views[i], Allocator);
 			SwapChain.Images[i] = VK_NULL_HANDLE;
 			SwapChain.Views[i] = VK_NULL_HANDLE;
 		}
 	}
 
-	const auto &GetSwapChainFormat = []() -> VkSurfaceFormatKHR {
+	const auto &GetSwapChainFormat = [&]() -> VkSurfaceFormatKHR {
 		uint32 surfaceFormatsCount;
-		VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceFormatsCount, nullptr);
+		VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(PhysicalDevice, BackBuffer, &surfaceFormatsCount, nullptr);
 		ASSERT(result == VK_SUCCESS && surfaceFormatsCount != 0);
 
 		VkSurfaceFormatKHR *surfaceFormats = ALLOCA(VkSurfaceFormatKHR, surfaceFormatsCount);
-		result = vkGetPhysicalDeviceSurfaceFormatsKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceFormatsCount, surfaceFormats);
+		result = vkGetPhysicalDeviceSurfaceFormatsKHR(PhysicalDevice, BackBuffer, &surfaceFormatsCount, surfaceFormats);
 		ASSERT(result == VK_SUCCESS);
 
 		if (surfaceFormatsCount == 1 && surfaceFormats[0].format == VK_FORMAT_UNDEFINED)
@@ -343,9 +322,9 @@ void InitVulkanSwapChain()
 		return surfaceFormats[0];
 	};
 
-	const auto &GetSwapChainExtent = []() -> VkExtent2D {
+	const auto &GetSwapChainExtent = [&]() -> VkExtent2D {
 		VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
-		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceCapabilities);
+		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, BackBuffer, &surfaceCapabilities);
 		ASSERT(result == VK_SUCCESS);
 
 		if (surfaceCapabilities.currentExtent.width == -1) {
@@ -358,9 +337,9 @@ void InitVulkanSwapChain()
 		return surfaceCapabilities.currentExtent;
 	};
 
-	const auto &GetSwapChainUsageFlags = []() -> VkImageUsageFlags {
+	const auto &GetSwapChainUsageFlags = [&]() -> VkImageUsageFlags {
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
-		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceCapabilities);
+		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, BackBuffer, &surfaceCapabilities);
 		ASSERT(result == VK_SUCCESS);
 
 		if (surfaceCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -370,20 +349,20 @@ void InitVulkanSwapChain()
 		return static_cast<VkImageUsageFlags>(-1);
 	};
 
-	const auto &GetSwapChainTransform = []() -> VkSurfaceTransformFlagBitsKHR {
+	const auto &GetSwapChainTransform = [&]() -> VkSurfaceTransformFlagBitsKHR {
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
-		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &surfaceCapabilities);
+		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, BackBuffer, &surfaceCapabilities);
 		ASSERT(result == VK_SUCCESS);
 		return surfaceCapabilities.currentTransform;
 	};
 
-	const auto &GetSwapChainPresentMode = []() -> VkPresentModeKHR {
+	const auto &GetSwapChainPresentMode = [&]() -> VkPresentModeKHR {
 		uint32 presentModesCount;
-		VkResult result = vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &presentModesCount, nullptr);
+		VkResult result = vkGetPhysicalDeviceSurfacePresentModesKHR(PhysicalDevice, BackBuffer, &presentModesCount, nullptr);
 		ASSERT(result == VK_SUCCESS && presentModesCount != 0);
 
 		VkPresentModeKHR *presentModes = ALLOCA(VkPresentModeKHR, presentModesCount);
-		result = vkGetPhysicalDeviceSurfacePresentModesKHR(Vulkan.PhysicalDevice, Vulkan.BackBuffer, &presentModesCount, presentModes);
+		result = vkGetPhysicalDeviceSurfacePresentModesKHR(PhysicalDevice, BackBuffer, &presentModesCount, presentModes);
 		ASSERT(result == VK_SUCCESS);
 
 		// MAILBOX is the lowest latency V-Sync enabled mode (something like triple-buffering) so use it if available
@@ -424,7 +403,7 @@ void InitVulkanSwapChain()
 	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainCreateInfo.pNext = nullptr;
 	swapchainCreateInfo.flags = 0;
-	swapchainCreateInfo.surface = Vulkan.BackBuffer;
+	swapchainCreateInfo.surface = BackBuffer;
 	swapchainCreateInfo.minImageCount = 2;
 	swapchainCreateInfo.imageFormat = surfaceFormat.format;
 	swapchainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -440,17 +419,17 @@ void InitVulkanSwapChain()
 	swapchainCreateInfo.clipped = VK_TRUE;
 	swapchainCreateInfo.oldSwapchain = prevSwapchain;
 
-	VkResult result = vkCreateSwapchainKHR(Vulkan.Device, &swapchainCreateInfo, Vulkan.Allocator, &SwapChain.Handle);
+	VkResult result = vkCreateSwapchainKHR(Device, &swapchainCreateInfo, Allocator, &SwapChain.Handle);
 	ASSERT(result == VK_SUCCESS);
 
 	if (prevSwapchain != VK_NULL_HANDLE)
-		vkDestroySwapchainKHR(Vulkan.Device, prevSwapchain, Vulkan.Allocator);
+		vkDestroySwapchainKHR(Device, prevSwapchain, Allocator);
 
 	uint32 imageCount = 0;
-	result = vkGetSwapchainImagesKHR(Vulkan.Device, SwapChain.Handle, &imageCount, nullptr);
+	result = vkGetSwapchainImagesKHR(Device, SwapChain.Handle, &imageCount, nullptr);
 	ASSERT(result == VK_SUCCESS && imageCount == ArrayLength(SwapChain.Images));
 
-	result = vkGetSwapchainImagesKHR(Vulkan.Device, SwapChain.Handle, &imageCount, SwapChain.Images);
+	result = vkGetSwapchainImagesKHR(Device, SwapChain.Handle, &imageCount, SwapChain.Images);
 	ASSERT(result == VK_SUCCESS);
 
 	for (int32 i = 0; i < ArrayLength(SwapChain.Images); ++i) {
@@ -471,12 +450,12 @@ void InitVulkanSwapChain()
 		imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
 		imageViewCreateInfo.subresourceRange.layerCount = 1;
 
-		VkResult result = vkCreateImageView(Vulkan.Device, &imageViewCreateInfo, Vulkan.Allocator, &SwapChain.Views[i]); 
+		VkResult result = vkCreateImageView(Device, &imageViewCreateInfo, Allocator, &SwapChain.Views[i]); 
 		ASSERT(result == VK_SUCCESS);
 	}
 }
 
-void InitVulkanCommandPool()
+void TVulkanAPI::InitCommandPool()
 {
 	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
 	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -484,32 +463,32 @@ void InitVulkanCommandPool()
 	commandPoolCreateInfo.flags = 0;
 	commandPoolCreateInfo.queueFamilyIndex = 0;
 
-	VkResult result = vkCreateCommandPool(Vulkan.Device, &commandPoolCreateInfo, nullptr, &Vulkan.Pool);
+	VkResult result = vkCreateCommandPool(Device, &commandPoolCreateInfo, nullptr, &Pool);
 	ASSERT(result == VK_SUCCESS);
 }
 
-VkCommandBuffer CreateCommandBuffer()
+VkCommandBuffer TVulkanAPI::CreateCommandBuffer()
 {
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo;
 	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	commandBufferAllocateInfo.pNext = nullptr;
-	commandBufferAllocateInfo.commandPool = Vulkan.Pool;
+	commandBufferAllocateInfo.commandPool = Pool;
 	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferAllocateInfo.commandBufferCount = 1;
 
 	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-	VkResult result = vkAllocateCommandBuffers(Vulkan.Device, &commandBufferAllocateInfo, &commandBuffer);
+	VkResult result = vkAllocateCommandBuffers(Device, &commandBufferAllocateInfo, &commandBuffer);
 	ASSERT(result == VK_SUCCESS);
 
 	return commandBuffer;
 }
 
-void DestroyCommandBuffer(VkCommandBuffer commandBuffer)
+void TVulkanAPI::DestroyCommandBuffer(VkCommandBuffer commandBuffer)
 {
-	vkFreeCommandBuffers(Vulkan.Device, Vulkan.Pool, 1, &commandBuffer);
+	vkFreeCommandBuffers(Device, Pool, 1, &commandBuffer);
 }
 
-VkRenderPass CreateRenderPass()
+VkRenderPass TVulkanAPI::CreateRenderPass()
 {
 	VkAttachmentDescription attachmentDescription = {};
 	attachmentDescription.flags = 0;
@@ -550,17 +529,17 @@ VkRenderPass CreateRenderPass()
 	renderPassCreateInfo.pDependencies = nullptr;
 
 	VkRenderPass renderPass = VK_NULL_HANDLE;
-	VkResult result = vkCreateRenderPass(Vulkan.Device, &renderPassCreateInfo, Vulkan.Allocator, &renderPass);
+	VkResult result = vkCreateRenderPass(Device, &renderPassCreateInfo, Allocator, &renderPass);
 	ASSERT(result == VK_SUCCESS);
 	return renderPass;
 }
 
-void DestroyRenderPass(VkRenderPass renderPass)
+void TVulkanAPI::DestroyRenderPass(VkRenderPass renderPass)
 {
-	vkDestroyRenderPass(Vulkan.Device, renderPass, Vulkan.Allocator);
+	vkDestroyRenderPass(Device, renderPass, Allocator);
 }
 
-VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass)
+VkFramebuffer TVulkanAPI::CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass)
 {
 	VkFramebufferCreateInfo framebufferCreateInfo = {};
 	framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -574,17 +553,98 @@ VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass)
 	framebufferCreateInfo.layers = 1;
 
 	VkFramebuffer framebuffer = VK_NULL_HANDLE;
-	VkResult result = vkCreateFramebuffer(Vulkan.Device, &framebufferCreateInfo, Vulkan.Allocator, &framebuffer);
+	VkResult result = vkCreateFramebuffer(Device, &framebufferCreateInfo, Allocator, &framebuffer);
 	ASSERT(result == VK_SUCCESS);
 	return framebuffer;
 }
 
-void DestroyFramebuffer(VkFramebuffer framebuffer)
+void TVulkanAPI::DestroyFramebuffer(VkFramebuffer framebuffer)
 {
-	vkDestroyFramebuffer(Vulkan.Device, framebuffer, Vulkan.Allocator);
+	vkDestroyFramebuffer(Device, framebuffer, Allocator);
 }
 
-VkPipelineLayout CreatePipelineLayout()
+static const float32 VertexData[][2] = {
+	{ -0.5, -0.5 },
+	{ -0.5,  0.5 },
+	{  0.5, -0.5 },
+	{  0.5,  0.5 }
+};
+
+void TVulkanAPI::UploadVertexData(VkDeviceMemory deviceMemory)
+{
+	void *mappedMemory = nullptr;
+	VkResult result = vkMapMemory(Device, deviceMemory, 0, sizeof(VertexData), 0, &mappedMemory);
+	ASSERT(result == VK_SUCCESS);
+	memcpy(mappedMemory, &VertexData, sizeof(VertexData));
+
+	VkMappedMemoryRange mappedMemoryRange = {};
+	mappedMemoryRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	mappedMemoryRange.pNext = nullptr;
+	mappedMemoryRange.memory = deviceMemory;
+	mappedMemoryRange.offset = 0;
+	mappedMemoryRange.size = VK_WHOLE_SIZE;
+
+	result = vkFlushMappedMemoryRanges(Device, 1, &mappedMemoryRange);
+	ASSERT(result == VK_SUCCESS);
+
+	vkUnmapMemory(Device, deviceMemory);
+}
+
+VkBuffer TVulkanAPI::CreateBuffer()
+{
+	VkBufferCreateInfo bufferCreateInfo = {};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.pNext = nullptr;
+	bufferCreateInfo.flags = 0;
+	bufferCreateInfo.size = sizeof(VertexData);
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	bufferCreateInfo.queueFamilyIndexCount = 0;
+	bufferCreateInfo.pQueueFamilyIndices = nullptr;
+
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkResult result = vkCreateBuffer(Device, &bufferCreateInfo, Allocator, &buffer);
+	ASSERT(result == VK_SUCCESS);
+	return buffer;
+}
+
+void TVulkanAPI::DestroyBuffer(VkBuffer buffer)
+{
+	vkDestroyBuffer(Device, buffer, Allocator);
+}
+
+VkDeviceMemory TVulkanAPI::AllocateDeviceMemory(VkBuffer buffer)
+{
+	VkMemoryRequirements memoryRequirements;
+	vkGetBufferMemoryRequirements(Device, buffer, &memoryRequirements);
+
+	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &physicalDeviceMemoryProperties);
+
+	for (uint32 i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; ++i) 
+	{
+		if (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		{
+			VkMemoryAllocateInfo memoryAllocateInfo = {};
+			memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			memoryAllocateInfo.pNext = nullptr;
+			memoryAllocateInfo.allocationSize = memoryRequirements.size;
+			memoryAllocateInfo.memoryTypeIndex = i;
+
+			VkDeviceMemory deviceMemory = VK_NULL_HANDLE;
+			VkResult result = vkAllocateMemory(Device, &memoryAllocateInfo, Allocator, &deviceMemory);
+			if (result == VK_SUCCESS) return deviceMemory;
+		}
+	}
+	return VK_NULL_HANDLE;
+}
+
+void TVulkanAPI::FreeDeviceMemory(VkDeviceMemory deviceMemory)
+{
+	vkFreeMemory(Device, deviceMemory, Allocator);
+}
+
+VkPipelineLayout TVulkanAPI::CreatePipelineLayout()
 {
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -596,20 +656,20 @@ VkPipelineLayout CreatePipelineLayout()
 	pipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
 
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-	VkResult result = vkCreatePipelineLayout(Vulkan.Device, &pipelineLayoutCreateInfo, Vulkan.Allocator, &pipelineLayout);
+	VkResult result = vkCreatePipelineLayout(Device, &pipelineLayoutCreateInfo, Allocator, &pipelineLayout);
 	ASSERT(result == VK_SUCCESS);
 	return pipelineLayout;
 }
 
-void DestroyPipelineLayout(VkPipelineLayout pipelineLayout)
+void TVulkanAPI::DestroyPipelineLayout(VkPipelineLayout pipelineLayout)
 {
-	vkDestroyPipelineLayout(Vulkan.Device, pipelineLayout, Vulkan.Allocator);
+	vkDestroyPipelineLayout(Device, pipelineLayout, Allocator);
 }
 
 //dxc.exe -spirv -fspv-target-env=vulkan1.1 -T vs_6_0 -E VS_main HelloTriangle.vs.hlsl -Fo HelloTriangle.vs.spirv
 //dxc.exe -spirv -fspv-target-env=vulkan1.1 -T ps_6_0 -E PS_main HelloTriangle.ps.hlsl -Fo HelloTriangle.ps.spirv
 
-VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size)
+VkShaderModule TVulkanAPI::CreateShaderModule(const uint32 *shader, uint32 size)
 {
 	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
 	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -619,22 +679,22 @@ VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size)
 	shaderModuleCreateInfo.pCode = shader;
 
 	VkShaderModule shaderModule = VK_NULL_HANDLE;
-	VkResult result = vkCreateShaderModule(Vulkan.Device, &shaderModuleCreateInfo, Vulkan.Allocator, &shaderModule);
+	VkResult result = vkCreateShaderModule(Device, &shaderModuleCreateInfo, Allocator, &shaderModule);
 	ASSERT(result == VK_SUCCESS);
 	return shaderModule;
 }
 
-void DestroyShaderModule(VkShaderModule shaderModule)
+void TVulkanAPI::DestroyShaderModule(VkShaderModule shaderModule)
 {
-	vkDestroyShaderModule(Vulkan.Device, shaderModule, Vulkan.Allocator);
+	vkDestroyShaderModule(Device, shaderModule, Allocator);
 }
 
-VkPipeline CreatePipeline(VkRenderPass renderPass)
+VkPipeline TVulkanAPI::CreatePipeline(VkRenderPass renderPass)
 {
-	FS::File ps = FS::Open("Test/HelloTriangle.ps.spirv");
-	FS::File vs = FS::Open("Test/HelloTriangle.vs.spirv");
-	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vs.pBuf), vs.uSize);
-	VkShaderModule pixelShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(ps.pBuf), ps.uSize);
+	FS::File ps = FS::Open("Test/HelloTriangle.ps.spirv", FS::Read);
+	FS::File vs = FS::Open("Test/HelloTriangle.vs.spirv", FS::Read);
+	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vs.Platform.Buffer), uint32(vs.Size));
+	VkShaderModule pixelShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(ps.Platform.Buffer), uint32(ps.Size));
 	FS::Close(ps);
 	FS::Close(vs);
 
@@ -655,20 +715,31 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	shaderStageCreateInfo[1].pName = "PS_main";
 	shaderStageCreateInfo[1].pSpecializationInfo = nullptr;
 
+	VkVertexInputBindingDescription vertexInputBindingDescription = {};
+	vertexInputBindingDescription.binding = 0;
+	vertexInputBindingDescription.stride = sizeof(float32[2]);
+	vertexInputBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	VkVertexInputAttributeDescription vertexInputAttributeDescription = {};
+	vertexInputAttributeDescription.location = 0;
+	vertexInputAttributeDescription.binding = 0;
+	vertexInputAttributeDescription.format = VK_FORMAT_R32G32_SFLOAT;
+	vertexInputAttributeDescription.offset = 0;
+	
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {};
 	vertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputStateCreateInfo.pNext = nullptr;
 	vertexInputStateCreateInfo.flags = 0;
-	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputStateCreateInfo.pVertexAttributeDescriptions = nullptr;
+	vertexInputStateCreateInfo.vertexBindingDescriptionCount = 1;
+	vertexInputStateCreateInfo.pVertexBindingDescriptions = &vertexInputBindingDescription;
+	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = 1;
+	vertexInputStateCreateInfo.pVertexAttributeDescriptions = &vertexInputAttributeDescription;
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
 	inputAssemblyStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssemblyStateCreateInfo.pNext = nullptr;
 	inputAssemblyStateCreateInfo.flags = 0;
-	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyStateCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 	inputAssemblyStateCreateInfo.primitiveRestartEnable = VK_FALSE;
 
 	VkViewport viewport = {};
@@ -796,7 +867,7 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	graphicsPipelineCreateInfo.basePipelineIndex = -1;
 
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
-	VkResult result = vkCreateGraphicsPipelines(Vulkan.Device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, Vulkan.Allocator, &graphicsPipeline);
+	VkResult result = vkCreateGraphicsPipelines(Device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, Allocator, &graphicsPipeline);
 	ASSERT(result == VK_SUCCESS);
 
 	DestroyShaderModule(vertexShaderModule);
@@ -805,12 +876,12 @@ VkPipeline CreatePipeline(VkRenderPass renderPass)
 	return graphicsPipeline;
 }
 
-void DestroyPipeline(VkPipeline pipeline)
+void TVulkanAPI::DestroyPipeline(VkPipeline pipeline)
 {
-	vkDestroyPipeline(Vulkan.Device, pipeline, Vulkan.Allocator);
+	vkDestroyPipeline(Device, pipeline, Allocator);
 }
 
-VkSemaphore CreateSemaphore()
+VkSemaphore TVulkanAPI::CreateSemaphore()
 {
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -818,7 +889,7 @@ VkSemaphore CreateSemaphore()
 	semaphoreCreateInfo.flags = 0;
 
 	VkSemaphore semaphore = VK_NULL_HANDLE;
-	VkResult result = vkCreateSemaphore(Vulkan.Device, &semaphoreCreateInfo, Vulkan.Allocator, &semaphore);
+	VkResult result = vkCreateSemaphore(Device, &semaphoreCreateInfo, Allocator, &semaphore);
 	ASSERT(result == VK_SUCCESS);
 	return semaphore;
 }
@@ -826,13 +897,21 @@ VkSemaphore CreateSemaphore()
 static VkSemaphore renderingFinishedSemaphore = VK_NULL_HANDLE;
 static VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
 
-void HelloWorld()
+void TVulkanAPI::HelloWorld()
 {
 	uint32_t i;
-	VkResult result = vkAcquireNextImageKHR(Vulkan.Device, SwapChain.Handle, std::numeric_limits<uint64>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
+	VkResult result = vkAcquireNextImageKHR(Device, SwapChain.Handle, TNumericLimits<uint64>::Max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
+	ASSERT(result == VK_SUCCESS);
 
 	VkRenderPass renderPass = CreateRenderPass();
 	VkFramebuffer framebuffer = CreateFramebuffer(SwapChain.Views[i], renderPass);
+	VkBuffer buffer = CreateBuffer();
+	VkDeviceMemory deviceMemory = AllocateDeviceMemory(buffer);
+
+	UploadVertexData(deviceMemory);
+	result = vkBindBufferMemory(Device, buffer, deviceMemory, 0);
+	ASSERT(result == VK_SUCCESS);
+
 	VkPipeline pipeline = CreatePipeline(renderPass);
 	VkCommandBuffer commandBuffer = CreateCommandBuffer();
 
@@ -902,7 +981,9 @@ void HelloWorld()
 	}
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buffer, &offset);
+	vkCmdDraw(commandBuffer, 4, 1, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
 	{
@@ -944,7 +1025,7 @@ void HelloWorld()
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderingFinishedSemaphore;
 
-		result = vkQueueSubmit(Vulkan.Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
+		result = vkQueueSubmit(Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
 		ASSERT(result == VK_SUCCESS);
 	}
 	
@@ -959,20 +1040,22 @@ void HelloWorld()
 		presentInfoKHR.pImageIndices = &i;
 		presentInfoKHR.pResults = nullptr;
 
-		result = vkQueuePresentKHR(Vulkan.Queues[Present], &presentInfoKHR);
+		result = vkQueuePresentKHR(Queues[Present], &presentInfoKHR);
 		ASSERT(result == VK_SUCCESS);
 	}
 
 	DestroyCommandBuffer(commandBuffer);
 	DestroyPipeline(pipeline);
+	FreeDeviceMemory(deviceMemory);
+	DestroyBuffer(buffer);
 	DestroyFramebuffer(framebuffer);
 	DestroyRenderPass(renderPass);
 }
 
-void ClearColor()
+void TVulkanAPI::ClearColor()
 {
 	uint32_t i;
-	VkResult result = vkAcquireNextImageKHR(Vulkan.Device, SwapChain.Handle, std::numeric_limits<uint64>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
+	VkResult result = vkAcquireNextImageKHR(Device, SwapChain.Handle, TNumericLimits<uint64>::Max(), imageAvailableSemaphore, VK_NULL_HANDLE, &i);
 
 	static VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 	if (commandBuffer != VK_NULL_HANDLE)
@@ -1076,7 +1159,7 @@ void ClearColor()
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &renderingFinishedSemaphore;
 
-		result = vkQueueSubmit(Vulkan.Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
+		result = vkQueueSubmit(Queues[Present], 1, &submitInfo, VK_NULL_HANDLE);
 		ASSERT(result == VK_SUCCESS);
 	}
 
@@ -1091,67 +1174,66 @@ void ClearColor()
 		presentInfoKHR.pImageIndices = &i;
 		presentInfoKHR.pResults = nullptr;
 
-		result = vkQueuePresentKHR(Vulkan.Queues[Present], &presentInfoKHR);
+		result = vkQueuePresentKHR(Queues[Present], &presentInfoKHR);
 		ASSERT(result == VK_SUCCESS);
 	}
 }
 
-void Init(HINSTANCE instance, HWND hwnd)
+void TVulkanAPI::Init(HINSTANCE instance, HWND hwnd)
 {
-    InitVulkanLib();
-	InitVulkanInstance();
-	InitVulkanBackBuffer(instance, hwnd);
-	InitVulkanDevice();
-	InitVulkanSwapChain();
-	vkGetDeviceQueue(Vulkan.Device, 0, 0, &Vulkan.Queues[Graphics]);
-	vkGetDeviceQueue(Vulkan.Device, 0, 0, &Vulkan.Queues[Present]);
-	InitVulkanCommandPool();
+	InitLib();
+	InitInstance();
+	InitBackBuffer(instance, hwnd);
+	InitDevice();
+	InitSwapChain();
+	vkGetDeviceQueue(Device, 0, 0, &Queues[Graphics]);
+	vkGetDeviceQueue(Device, 0, 0, &Queues[Present]);
+	InitCommandPool();
 
 	renderingFinishedSemaphore = CreateSemaphore();
 	imageAvailableSemaphore = CreateSemaphore();
-	while(true) HelloWorld();
 }	
 
-void DoneVulkanLib()
+void TVulkanAPI::DoneLib()
 {
-	FreeLibrary(Vulkan.Library);
-	Vulkan.Library = nullptr;
+	FreeLibrary(Library);
+	Library = nullptr;
 }
 
-void DoneVukanBackBuffer()
+void TVulkanAPI::DoneBackBuffer()
 {
-	vkDestroySurfaceKHR(Vulkan.Instance, Vulkan.BackBuffer, Vulkan.Allocator);
-	Vulkan.BackBuffer = nullptr;
+	vkDestroySurfaceKHR(Instance, BackBuffer, Allocator);
+	BackBuffer = nullptr;
 }
 
-void DoneVulkanInstance()
+void TVulkanAPI::DoneInstance()
 {
-	vkDestroyInstance(Vulkan.Instance, Vulkan.Allocator);
-	Vulkan.Instance = nullptr;
+	vkDestroyInstance(Instance, Allocator);
+	Instance = nullptr;
 }
 
-void DoneVulkanDevice()
+void TVulkanAPI::DoneDevice()
 {
-	vkDestroyDevice(Vulkan.Device, Vulkan.Allocator);
-	Vulkan.Device = nullptr;
+	vkDestroyDevice(Device, Allocator);
+	Device = nullptr;
 }
 
-void DoneVulkanSwapChain()
+void TVulkanAPI::DoneSwapChain()
 {
 	// TODO: Move from DoneVulkanSwapChain
 }
 
-void DoneVulkanCommandPool()
+void TVulkanAPI::DoneCommandPool()
 {
-	vkDestroyCommandPool(Vulkan.Device, Vulkan.Pool, Vulkan.Allocator);
+	vkDestroyCommandPool(Device, Pool, Allocator);
 }
 
-void Done()
+void TVulkanAPI::Done()
 {
-	DoneVulkanCommandPool();
-	DoneVulkanSwapChain();
-	DoneVulkanDevice();
-	DoneVukanBackBuffer();
-	DoneVulkanInstance();
-    DoneVulkanLib();
+	DoneCommandPool();
+	DoneSwapChain();
+	DoneDevice();
+	DoneBackBuffer();
+	DoneInstance();
+    DoneLib();
 }

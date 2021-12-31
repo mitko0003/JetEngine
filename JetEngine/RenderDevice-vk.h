@@ -11,3 +11,70 @@
 //#include "VulkanFunctions.h"
 
 #undef VK_DEFINE_FUNCTION
+
+#include "RenderDevice.h"
+
+class TVulkanSwapChain final : public ISwapChain
+{
+private:
+	friend class TVulkanAPI;
+
+	VkSwapchainKHR Handle = VK_NULL_HANDLE;
+	VkImage Images[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	VkImageView Views[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+};
+
+class TVulkanAPI final : public IGraphicsAPI
+{
+public:
+	void Init(HINSTANCE instance, HWND hwnd) override;
+	void Done() override;
+
+	void HelloWorld();
+
+private:
+	void InitLib();
+	void InitInstance();
+	void InitDevice();
+	void InitBackBuffer(HINSTANCE instance, HWND hwnd);
+	void InitSwapChain();
+	void InitCommandPool();
+
+	void DoneLib();
+	void DoneBackBuffer();
+	void DoneInstance();
+	void DoneDevice();
+	void DoneSwapChain();
+	void DoneCommandPool();
+
+	void ClearColor();
+	VkSemaphore CreateSemaphore();
+	void DestroyPipeline(VkPipeline pipeline);
+	VkPipeline CreatePipeline(VkRenderPass renderPass);
+	VkCommandBuffer CreateCommandBuffer();
+	void DestroyCommandBuffer(VkCommandBuffer commandBuffer);
+	VkRenderPass CreateRenderPass();
+	void DestroyRenderPass(VkRenderPass renderPass);
+	VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass);
+	void DestroyFramebuffer(VkFramebuffer framebuffer);
+	void UploadVertexData(VkDeviceMemory deviceMemory);
+	VkBuffer CreateBuffer();
+	void DestroyBuffer(VkBuffer buffer);
+	VkDeviceMemory AllocateDeviceMemory(VkBuffer buffer);
+	void FreeDeviceMemory(VkDeviceMemory deviceMemory);
+	VkPipelineLayout CreatePipelineLayout();
+	void DestroyPipelineLayout(VkPipelineLayout pipelineLayout);
+	VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size);
+	void DestroyShaderModule(VkShaderModule shaderModule);
+
+	LibraryType Library = VK_NULL_HANDLE;
+	VkInstance Instance = VK_NULL_HANDLE;
+	VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
+	VkDevice Device = VK_NULL_HANDLE;
+	VkAllocationCallbacks *Allocator = nullptr;
+	VkSurfaceKHR BackBuffer = VK_NULL_HANDLE;
+	TVulkanSwapChain SwapChain;
+
+	VkQueue Queues[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+	VkCommandPool Pool = VK_NULL_HANDLE;
+};

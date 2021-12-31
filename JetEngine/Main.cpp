@@ -1,7 +1,10 @@
 #include "Precompiled.h"
 
-#include "RenderDevice.h"
+#include "RenderDevice-vk.h"
+#include "memory.h"
 #include "Math.h"
+//#include "tiny_obj_loader.h"
+//#include <vector>
 
 //#define CONSOLE
 
@@ -14,30 +17,26 @@ int main()
 
 #else
 
-void MainLoop()
+void MainLoop(TVulkanAPI *graphicsAPI)
 {
+	graphicsAPI->HelloWorld();
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
-    case WM_DESTROY:
-    {
-        PostQuitMessage(0);
-    }
-    return 0;
+		case WM_SIZE:
+		case WM_EXITSIZEMOVE: {
+			PostMessage(hwnd, WM_USER + 1, wParam, lParam);
+		} return 0;
 
-    case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-        FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
-        EndPaint(hwnd, &ps);
+		case WM_DESTROY: {
+			PostQuitMessage(0);
+		} return 0;
+
+		default: return DefWindowProc(hwnd, uMsg, wParam, lParam);
     }
-    return 0;
-    }
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
 INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdShow)
@@ -47,31 +46,48 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
 	GetCurrentDirectory(sizeof(cwd), cwd);
 	DebugPrint<logVerbose>("CWD: %s\n", cwd);
     const char CLASS_NAME[] = "Jet Engine";
-	
-    WNDCLASS wc = { };
 
+	//tinyobj::attrib_t attrib;
+	//std::vector<tinyobj::shape_t> shapes;
+	//std::vector<tinyobj::material_t> materials;
+
+	//std::string warn;
+	//std::string err;
+	//(attrib_t *attrib, std::vector<shape_t> *shapes,
+	//	std::vector<material_t> *materials, std::string *warn,
+	//	std::string *err, std::istream *inStream,
+	//	MaterialReader *readMatFn /*= NULL*/, bool triangulate,
+	//	bool default_vcols_fallback)
+	//bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err);
+	
+	WNDCLASSEX wc = { };
+
+	wc.cbSize = sizeof(WNDCLASSEX);
+	wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = instance;
     wc.lpszClassName = CLASS_NAME;
+	wc.hIcon = NULL;
 
-    RegisterClass(&wc);
+	if (!RegisterClassEx(&wc))
+		return false;
 
     // Create the window.
 
     HWND hwnd = CreateWindowEx(
-                    0,                              // Optional window styles.
-                    CLASS_NAME,                     // Window class
-                    "[Debug][Vulkan] Jet Engine",   // Window text
-                    WS_OVERLAPPEDWINDOW,            // Window style
+        0,                              // Optional window styles.
+        CLASS_NAME,                     // Window class
+        "[Debug][Vulkan] Jet Engine",   // Window text
+        WS_OVERLAPPEDWINDOW,            // Window style
 
-                    // Size and position
-                    0, 0, 1920, 1080,
+        // Size and position
+        0, 0, 1920, 1080,
 
-                    NULL,       // Parent window
-                    NULL,       // Menu
-                    instance,  // Instance handle
-                    NULL        // Additional application data
-                );
+        NULL,       // Parent window
+        NULL,       // Menu
+        instance,   // Instance handle
+        nullptr     // Additional application data
+    );
 
     if (hwnd == NULL)
     {
@@ -80,17 +96,25 @@ INT WinMain(HINSTANCE instance, HINSTANCE prevInstance, PSTR cmdLine, INT cmdSho
 
     ShowWindow(hwnd, cmdShow);
 	UpdateWindow(hwnd);
-	Init(instance, hwnd);
+
+	TVulkanAPI vulkan;
+	vulkan.Init(instance, hwnd);
 
     // Run the message loop.
-    MSG msg = { };
-    while (GetMessage(&msg, NULL, 0, 0))
+    MSG message = {};
+    while (true)
     {
-        MainLoop();
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+		PeekMessage(&message, NULL, 0, 0, PM_REMOVE);
+		switch (message.message)
+		{
+
+		}
+        MainLoop(&vulkan);
+        TranslateMessage(&message);
+        DispatchMessage(&message);
     }
 
+	vulkan.Done();
     return 0;
 }
 

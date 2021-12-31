@@ -1,15 +1,24 @@
 #pragma once
 
+#include "FileSystem-nt.h"
+
 namespace FS
 {
-	struct File
+	enum AccessMode : uint32
 	{
-		uint64 uSize = 0;
-		LPVOID pBuf = nullptr;
-		HANDLE hMapFile = INVALID_HANDLE_VALUE;
-		HANDLE hFile = INVALID_HANDLE_VALUE;
+		None        = 0u,
+		Read        = 1u << 0u,
+		Write       = 1u << 1u,
+		Execute     = 1u << 2u,
+		ReadWrite   = Read | Write,
 	};
 
-	File Open(const char *path);
+	struct File
+	{
+		uint64 Size = 0;
+		PlatformFile Platform;
+	};
+
+	File Open(const char *path, AccessMode accessMode = AccessMode::None);
 	void Close(File file);
 }

@@ -2,7 +2,7 @@
 
 #include "malloc.h"
 
-#define ASSERT(condition) do { if(!(condition)) { DebugPrint("%s(%d): %s", __FILE__, __LINE__, #condition); DebugBreak(); exit(1); } } while (false)
+#define ASSERT(condition) do { if(!(condition)) { DebugPrint("%s(%d): %s", __FILE__, __LINE__, #condition); DebugBreak(); } } while (false)
 #define ALLOCA(type, size) static_cast<type*>(_alloca(sizeof(type) * size))
 
 using LibraryType = HMODULE;
@@ -10,7 +10,7 @@ using LibraryType = HMODULE;
 template <typename T>
 constexpr int32 ArrayLength(const T &arr) 
 {
-	static_assert(std::is_array<T>::value, "Non-array type!");
+	static_assert(TIsArray_v<T>, "Non-array type!");
 	return sizeof(arr) / sizeof(arr[0]);
 }
 
@@ -26,36 +26,6 @@ struct Array
 	static constexpr int32 size = _size;
 	T elements[size];
 };
-
-template <typename T>
-inline constexpr T Min(T a, T b)
-{
-	return a < b ? a : b;
-}
-
-template <typename T>
-inline constexpr T Max(T a, T b)
-{
-	return a < b ? b : a;
-}
-
-template <typename T>
-inline constexpr T Clamp(T x, T a, T b)
-{
-	return Min(Max(x, a), b);
-}
-
-template <typename T>
-inline constexpr T Saturate(T x)
-{
-	return Clamp(x, T(0), T(1));
-}
-
-template <typename T>
-inline constexpr typename std::enable_if<std::is_integral<T>::value, T>::type DivCeil(T x, T y)
-{
-	return (x + y - 1) / y;
-}
 
 template <typename T> inline T CountLeadingZeros(T x);
 template <> inline uint32 CountLeadingZeros(uint32 x) { return _lzcnt_u32(x); }
