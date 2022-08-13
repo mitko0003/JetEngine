@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="TVarArray&lt;*&gt;">
+    <Expand>
+      <Item Name="[Size]">Size</Item>
+      <Item Name="[Capacity]">Capacity</Item>
+      <ArrayItems>
+        <Size>Size</Size>
+        <ValuePointer>Data</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>  
+</AutoVisualizer>
