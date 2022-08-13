@@ -1,6 +1,6 @@
 #pragma once
 
-#include "TypeTraits.h"
+#include "Core/Misc/TypeTraits.h"
 
 template <typename T>
-concept CIntegral = TIsIntegral_v<T>;
+concept CIntegral = IsIntegral<T>;

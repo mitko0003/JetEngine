@@ -1,6 +1,7 @@
 #include "Precompiled.h"
 
 #include "FileSystem.h"
+#include "WindowContext-nt.h"
 #include "RenderDevice.h"
 #include "RenderDevice-vk.h"
 
@@ -126,14 +127,16 @@ void TVulkanAPI::InitInstance()
 #undef VK_INSTANCE_LEVEL_FUNCTION
 }
 
-void TVulkanAPI::InitBackBuffer(HINSTANCE instance, HWND hwnd)
+void TVulkanAPI::InitBackBuffer(const IWindow *baseWindow)
 {
 	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo;
 	win32SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 	win32SurfaceCreateInfo.pNext = nullptr;
 	win32SurfaceCreateInfo.flags = 0;
-	win32SurfaceCreateInfo.hinstance = instance;
-	win32SurfaceCreateInfo.hwnd = hwnd;
+
+	const auto *window = static_cast<const TWindowNT *>(baseWindow);
+	win32SurfaceCreateInfo.hinstance = window->Instance;
+	win32SurfaceCreateInfo.hwnd = window->Handle;
 
 	VkResult result = vkCreateWin32SurfaceKHR(Instance, &win32SurfaceCreateInfo, Allocator, &BackBuffer);
 	ASSERT(result == VK_SUCCESS);
@@ -575,7 +578,7 @@ void TVulkanAPI::UploadVertexData(VkDeviceMemory deviceMemory)
 	void *mappedMemory = nullptr;
 	VkResult result = vkMapMemory(Device, deviceMemory, 0, sizeof(VertexData), 0, &mappedMemory);
 	ASSERT(result == VK_SUCCESS);
-	memcpy(mappedMemory, &VertexData, sizeof(VertexData));
+	MemCopy(mappedMemory, &VertexData, sizeof(VertexData));
 
 	VkMappedMemoryRange mappedMemoryRange = {};
 	mappedMemoryRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -590,38 +593,30 @@ void TVulkanAPI::UploadVertexData(VkDeviceMemory deviceMemory)
 	vkUnmapMemory(Device, deviceMemory);
 }
 
-VkBuffer TVulkanAPI::CreateBuffer()
+IGraphicsBuffer* TVulkanAPI::CreateBuffer(int32 size)
 {
 	VkBufferCreateInfo bufferCreateInfo = {};
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.pNext = nullptr;
 	bufferCreateInfo.flags = 0;
-	bufferCreateInfo.size = sizeof(VertexData);
+	bufferCreateInfo.size = size;
 	bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	bufferCreateInfo.queueFamilyIndexCount = 0;
 	bufferCreateInfo.pQueueFamilyIndices = nullptr;
 
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VkResult result = vkCreateBuffer(Device, &bufferCreateInfo, Allocator, &buffer);
+	VkBuffer resourceHandle = VK_NULL_HANDLE;
+	VkResult result = vkCreateBuffer(Device, &bufferCreateInfo, Allocator, &resourceHandle);
 	ASSERT(result == VK_SUCCESS);
-	return buffer;
-}
 
-void TVulkanAPI::DestroyBuffer(VkBuffer buffer)
-{
-	vkDestroyBuffer(Device, buffer, Allocator);
-}
-
-VkDeviceMemory TVulkanAPI::AllocateDeviceMemory(VkBuffer buffer)
-{
 	VkMemoryRequirements memoryRequirements;
-	vkGetBufferMemoryRequirements(Device, buffer, &memoryRequirements);
+	vkGetBufferMemoryRequirements(Device, resourceHandle, &memoryRequirements);
 
 	VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &physicalDeviceMemoryProperties);
 
-	for (uint32 i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; ++i) 
+	VkDeviceMemory memoryHandle = VK_NULL_HANDLE;
+	for (uint32 i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; ++i)
 	{
 		if (physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 		{
@@ -631,17 +626,23 @@ VkDeviceMemory TVulkanAPI::AllocateDeviceMemory(VkBuffer buffer)
 			memoryAllocateInfo.allocationSize = memoryRequirements.size;
 			memoryAllocateInfo.memoryTypeIndex = i;
 
-			VkDeviceMemory deviceMemory = VK_NULL_HANDLE;
-			VkResult result = vkAllocateMemory(Device, &memoryAllocateInfo, Allocator, &deviceMemory);
-			if (result == VK_SUCCESS) return deviceMemory;
+			VkResult result = vkAllocateMemory(Device, &memoryAllocateInfo, Allocator, &memoryHandle);
+			if (result == VK_SUCCESS)
+				break;
 		}
 	}
-	return VK_NULL_HANDLE;
+
+	auto *buffer = new TVulkanBuffer(this);
+	buffer->ResourceHandle = resourceHandle;
+	buffer->MemoryHandle = memoryHandle;
+	return buffer;
 }
 
-void TVulkanAPI::FreeDeviceMemory(VkDeviceMemory deviceMemory)
+TVulkanBuffer::~TVulkanBuffer()
 {
-	vkFreeMemory(Device, deviceMemory, Allocator);
+	auto *vulkanDevice = static_cast<TVulkanAPI *>(ParentDevice);
+	vkFreeMemory(vulkanDevice->Device, MemoryHandle, vulkanDevice->Allocator);
+	vkDestroyBuffer(vulkanDevice->Device, ResourceHandle, vulkanDevice->Allocator);
 }
 
 VkPipelineLayout TVulkanAPI::CreatePipelineLayout()
@@ -691,10 +692,10 @@ void TVulkanAPI::DestroyShaderModule(VkShaderModule shaderModule)
 
 VkPipeline TVulkanAPI::CreatePipeline(VkRenderPass renderPass)
 {
-	FS::File ps = FS::Open("Test/HelloTriangle.ps.spirv", FS::Read);
-	FS::File vs = FS::Open("Test/HelloTriangle.vs.spirv", FS::Read);
-	VkShaderModule vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vs.Platform.Buffer), uint32(vs.Size));
-	VkShaderModule pixelShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(ps.Platform.Buffer), uint32(ps.Size));
+	auto ps = FS::Open("Test/HelloTriangle.ps.spirv", FS::Read);
+	auto vs = FS::Open("Test/HelloTriangle.vs.spirv", FS::Read);
+	auto vertexShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(vs.Platform.Buffer), uint32(vs.Size));
+	auto pixelShaderModule = CreateShaderModule(reinterpret_cast<const uint32*>(ps.Platform.Buffer), uint32(ps.Size));
 	FS::Close(ps);
 	FS::Close(vs);
 
@@ -905,11 +906,10 @@ void TVulkanAPI::HelloWorld()
 
 	VkRenderPass renderPass = CreateRenderPass();
 	VkFramebuffer framebuffer = CreateFramebuffer(SwapChain.Views[i], renderPass);
-	VkBuffer buffer = CreateBuffer();
-	VkDeviceMemory deviceMemory = AllocateDeviceMemory(buffer);
+	auto *buffer = static_cast<TVulkanBuffer*>(CreateBuffer(sizeof(VertexData)));
 
-	UploadVertexData(deviceMemory);
-	result = vkBindBufferMemory(Device, buffer, deviceMemory, 0);
+	UploadVertexData(buffer->MemoryHandle);
+	result = vkBindBufferMemory(Device, buffer->ResourceHandle, buffer->MemoryHandle, 0);
 	ASSERT(result == VK_SUCCESS);
 
 	VkPipeline pipeline = CreatePipeline(renderPass);
@@ -982,7 +982,7 @@ void TVulkanAPI::HelloWorld()
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 	VkDeviceSize offset = 0;
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buffer, &offset);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &buffer->ResourceHandle, &offset);
 	vkCmdDraw(commandBuffer, 4, 1, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1046,8 +1046,7 @@ void TVulkanAPI::HelloWorld()
 
 	DestroyCommandBuffer(commandBuffer);
 	DestroyPipeline(pipeline);
-	FreeDeviceMemory(deviceMemory);
-	DestroyBuffer(buffer);
+	delete buffer;
 	DestroyFramebuffer(framebuffer);
 	DestroyRenderPass(renderPass);
 }
@@ -1179,11 +1178,11 @@ void TVulkanAPI::ClearColor()
 	}
 }
 
-void TVulkanAPI::Init(HINSTANCE instance, HWND hwnd)
+void TVulkanAPI::Init(const IWindow *window)
 {
 	InitLib();
 	InitInstance();
-	InitBackBuffer(instance, hwnd);
+	InitBackBuffer(window);
 	InitDevice();
 	InitSwapChain();
 	vkGetDeviceQueue(Device, 0, 0, &Queues[Graphics]);

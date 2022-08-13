@@ -9,21 +9,26 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
     <Filter Include="External">
       <UniqueIdentifier>{d601d5b6-ff5f-4efa-aae3-bb3928da0d87}</UniqueIdentifier>
     </Filter>
     <Filter Include="External\tiny_obj_loader">
       <UniqueIdentifier>{6da5f282-2442-403a-a4bb-bbeb1907409d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\std">
+    <Filter Include="Core">
       <UniqueIdentifier>{66cdbfc3-4b12-40d1-b707-2c36ceaab91b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\std">
-      <UniqueIdentifier>{5e699b4b-21b8-42ea-8a06-2b01274c5f01}</UniqueIdentifier>
+    <Filter Include="Core\Misc">
+      <UniqueIdentifier>{9910e46c-1419-491d-a0dd-3ea4b9bbab2a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Math">
+      <UniqueIdentifier>{1f457c60-fcb5-4b6c-9570-f854a4ed3149}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Containters">
+      <UniqueIdentifier>{4de3f377-e89b-4c5f-95d4-e0f2218c910f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Memory">
+      <UniqueIdentifier>{44e7a6e6-ceb8-41f4-8318-8f0ad8f0fe16}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -39,27 +44,21 @@
     <ClCompile Include="..\External\tinyobjloader\tiny_obj_loader.cc">
       <Filter>External\tiny_obj_loader</Filter>
     </ClCompile>
-    <ClCompile Include="String.cpp">
-      <Filter>Source Files\std</Filter>
+    <ClCompile Include="WindowContext-nt.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Core\Containers\String.cpp">
+      <Filter>Core\Containters</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Source\Core\Math\Math.cpp">
+      <Filter>Core\Math</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderDevice-vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Types.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Math.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Utils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="VulkanFunctions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Memory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RenderGraph.h">
@@ -80,23 +79,52 @@
     <ClInclude Include="FileSystem-nt.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SmartPointers.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="WindowContext.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="String.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="WindowContext-nt.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Utility.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="..\Source\Core\Misc\Concepts.h">
+      <Filter>Core\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="TypeTraits.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="..\Source\Core\Misc\Limits.h">
+      <Filter>Core\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="Limits.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="..\Source\Core\Misc\TypeTraits.h">
+      <Filter>Core\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="Tuple.h">
-      <Filter>Header Files\std</Filter>
+    <ClInclude Include="..\Source\Core\Misc\Utility.h">
+      <Filter>Core\Misc</Filter>
     </ClInclude>
+    <ClInclude Include="..\Source\Core\Misc\Tuple.h">
+      <Filter>Core\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Misc\Types.h">
+      <Filter>Core\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Misc\Utils.h">
+      <Filter>Core\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Math\Math.h">
+      <Filter>Core\Math</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Containers\String.h">
+      <Filter>Core\Containters</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Memory\SmartPointers.h">
+      <Filter>Core\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Memory\Memory.h">
+      <Filter>Core\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Source\Core\Misc\Functional.h">
+      <Filter>Core\Misc</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="..\Source\Core\Core.natvis">
+      <Filter>Core</Filter>
+    </Natvis>
   </ItemGroup>
 </Project>

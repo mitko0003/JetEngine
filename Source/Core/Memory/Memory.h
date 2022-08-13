@@ -1,21 +1,52 @@
 #pragma once
 
-void* operator new(size_t) {
-	ASSERT(!"Not implemented!");
-	return nullptr;
+#include <Core/Misc/Utility.h>
+#include <Core/Misc/Types.h>
+
+template <typename T>
+constexpr TRemoveReference_t<T> &&Move(T &&value) noexcept
+{
+	return static_cast<TRemoveReference_t<T> &&>(value);
 }
 
-void* operator new[](size_t) {
-	ASSERT(!"Not implemented!");
-	return nullptr;
+template <typename T>
+constexpr T &&Forward(T &value)
+{
+	return static_cast<T &&>(value);
 }
 
-void operator delete(void*) {
-	ASSERT(!"Not implemented!");
+template <typename T>
+T *AddressOf(T &reference)
+{
+	return &reference;
 }
 
-void operator delete[](void*) {
-	ASSERT(!"Not implemented!");
+template <class T>
+constexpr void DestroyAt(T *object)
+{
+	if constexpr (IsArray<T>)
+		for (auto &elem : *object)
+			DestroyAt(AddressOf(elem));
+	else
+		object->~T();
+}
+
+inline void MemorySet(void *first, int32 value, size_t size)
+{
+	auto *curr = reinterpret_cast<uint8 *>(first);
+	for (const auto *end = curr + size; curr != end; ++curr)
+		*curr = value;
+}
+
+inline int MemoryCompare(const void *lhs, const void *rhs, int32 size)
+{
+	return 0;
+}
+
+template<typename T, typename... TArgs>
+inline void ConstructAt(T *object, TArgs &&... args)
+{
+	::new (static_cast<void *>(object)) T(Forward<TArgs>(args)...);
 }
 
 struct
@@ -50,7 +81,7 @@ template<uint8 *&pool, uint32 poolSize>
 class FixedAllocator
 {
 public:
-	FixedAllocator() { memset(&bits, 0, sizeof(bits)); }
+	FixedAllocator() { MemorySet(&bits, 0, sizeof(bits)); }
 	uint8 *Alloc(int32 size)
 	{
 		return nullptr;

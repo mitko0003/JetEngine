@@ -1,8 +1,10 @@
 #pragma once
 
-#include "TypeTraits.h"
-#include "Utility.h"
-#include "Tuple.h"
+#include <string.h>
+
+#include "Core/Misc/TypeTraits.h"
+#include "Core/Misc/Utility.h"
+#include "Core/Misc/Tuple.h"
 
 template <typename T>
 class TVarArray
@@ -87,7 +89,7 @@ public:
 		return Create(&Data[Size++], value);
 	}
 
-	TEnableIf_t<TIsMoveAssignable_v<T>, T>& push_back(T&& value)
+	TEnableIf_t<IsMoveAssignable<T>, T>& push_back(T&& value)
 	{
 		if (Size == Capacity)
 			reserve(getNextSize());
@@ -161,15 +163,15 @@ private:
 	T* Data;
 	size_t Size;
 	size_t Capacity;
-	static_assert(TIsCopyConstructible_v<T> ||
-		(TIsDefaultConstructible_v<T> && TIsAssignable_v<T, const T&>),
+	static_assert(IsCopyConstructible<T> ||
+		(IsDefaultConstructible<T> && IsAssignable<T, const T&>),
 		"Vector requires copy constructor or default constructor + assignment operator");
 
 	// Used to create objects depending on constructor-operator combination
 
 	T& Create(T* mem, const T& value)
 	{
-		if constexpr (TIsCopyConstructible_v<T>)
+		if constexpr (IsCopyConstructible<T>)
 		{
 			ConstructAt(mem, value);
 		}
@@ -181,9 +183,9 @@ private:
 		return *mem;
 	}
 
-	TEnableIf_t<TIsMoveAssignable_v<T>, T>& Create(T* mem, T&& value)
+	TEnableIf_t<IsMoveAssignable<T>, T>& Create(T* mem, T&& value)
 	{
-		if constexpr (TIsCopyConstructible_v<T>)
+		if constexpr (IsCopyConstructible<T>)
 		{
 			ConstructAt(mem, Move(value));
 		}
@@ -215,27 +217,195 @@ private:
 	}
 };
 
-class TString
+template <typename TChar>
+class TBasicString
 {
 public:
-	TString();
-	explicit TString(const char *input);
-	TString(const TString &rhs);
-	TString(TString &&rhs);
+	TBasicString() :
+		Size(0), Data(nullptr) {}
 
-	~TString();
+	explicit TBasicString(const TChar *input)
+	{
+		Size = int32_t(strlen(input));
+		Data = new char[Size + 1];
+		MemCopy(Data, input, Size + 1);
+	}
 
-	TString& operator=(TString &&rhs);
+	TBasicString(const TBasicString &rhs) :
+		Size(rhs.Size), Data(nullptr)
+	{
+		if (Size != 0)
+		{
+			Data = new TChar[Size + 1];
+			MemCopy(Data, rhs.Data, Size + 1);
+		}
+	}
 
-	TString operator+(const TString &rhs) const;
-	TString operator+(const char *rhs) const;
-	TString& operator+=(const TString &rhs);
-	TString& operator+=(const char *rhs);
+	TBasicString(TBasicString &&rhs) :
+		Size(0), Data(nullptr)
+	{
+		*this = Move(rhs);
+	}
 
-	int32_t Length() const;
-	const char *c_str() const;
+	TBasicString &operator=(TBasicString &&rhs)
+	{
+		if (this != &rhs)
+		{
+			delete[] Data;
+			Data = nullptr;
+			Size = 0;
+
+			Swap(Data, rhs.Data);
+			Swap(Size, rhs.Size);
+		}
+		return *this;
+	}
+
+	template <CIntegral TIndex>
+	constexpr TChar &operator[](TIndex i) {
+		return Data[i];
+	}
+	template <CIntegral TIndex>
+	constexpr const TChar &operator[](TIndex i) const {
+		return Data[i];
+	}
+
+	TBasicString operator+(const TBasicString &rhs) const
+	{
+		TBasicString result;
+		result.Size = Size + rhs.Size;
+		if (result.Size > 0)
+		{
+			result.Data = new char[result.Size + 1];
+
+			MemCopy(result.Data, Data, Size);
+			if (rhs.Data != nullptr)
+				MemCopy(result.Data + Size, rhs.Data, rhs.Size + 1);
+			else
+				result.Data[result.Size + 1] = TChar('\0');
+		}
+		return result;
+	}
+
+	TBasicString operator+(const TChar *rhs) const
+	{
+		TBasicString dummy;
+		dummy.Data = const_cast<char *>(rhs);
+		dummy.Size = int32_t(strlen(rhs));
+
+		TBasicString result;
+		result = *this + dummy;
+
+		dummy.Data = nullptr;
+		dummy.Size = 0;
+
+		return result;
+	}
+
+	TBasicString &operator+=(const TBasicString &rhs)
+	{
+		return *this = *this + rhs;
+	}
+	TBasicString &operator+=(const TChar *rhs)
+	{
+		return *this = *this + rhs;
+	}
+
+	bool operator==(const TBasicString &rhs) const
+	{
+		if (Size != rhs.Size)
+			return false;
+
+		for (int32 i = 0; i < Size; ++i)
+		{
+			if ((*this)[i] != rhs[i])
+				return false;
+		}
+
+		return true;
+	}
+
+	bool operator!=(const TBasicString &rhs) const
+	{
+		return !(*this == rhs);
+	}
+
+	int32 Length() const {
+		return Size;
+	}
+	const TChar *c_str() const {
+		return Data;
+	}
 
 private:
-	char *Data;
-	int32_t Size;
+	TChar *Data;
+	int32 Size;
 };
+
+using TString = TBasicString<char8>;
+
+inline TString ToString(int32 integer)
+{
+	char temporary[10];
+	auto last = temporary;
+
+	do
+	{
+		*last++ = '0' + integer % 10;
+	} while (integer /= 10);
+
+	char result[10];
+	auto curr = result;
+
+	do
+	{
+		*curr++ = *--last;
+	} while (last != temporary);
+	*curr = '\0';
+
+	return TString(result);
+}
+
+template <typename T>
+inline T StringTo(const char*);
+
+template <>
+inline uint32 StringTo(const char *data)
+{
+	int32 result = 0;
+	for (; *data != '\0' && *data >= '0' && *data <= '9'; ++data)
+		result = result * 10 + (*data - '0');
+	return result;
+}
+
+template <>
+inline int32 StringTo(const char *data)
+{
+	int32 sign = 1;
+	if (*data == '-')
+	{
+		sign = -1;
+		++data;
+	}
+	return sign * StringTo<uint32>(data);
+}
+
+inline int32 StringCompare(const char *lhs, const char *rhs)
+{
+	int32 i = 0;
+	while (lhs[i] == rhs[i] && lhs[i] != '\0' && rhs[i] != '\0')
+		++i;
+	if (lhs[i] == rhs[i])
+		return 0;
+	return lhs[i] > rhs[i] ? 1 : -1;
+}
+
+inline int32 StringCompareN(const char *lhs, const char *rhs, int32 n)
+{
+	int32 i = 0;
+	while (lhs[i] == rhs[i] && lhs[i] != '\0' && rhs[i] != '\0' && i < n - 1)
+		++i;
+	if (lhs[i] == rhs[i])
+		return 0;
+	return lhs[i] > rhs[i] ? 1 : -1;
+}

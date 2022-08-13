@@ -9,10 +9,10 @@
 #include <intrin.h>
 #include <stdio.h>
 
-#include "Types.h"
-#include "Limits.h"
-#include "Utility.h"
-#include "Tuple.h"
-#include "SmartPointers.h"
+#include "Core/Misc/Types.h"
+#include "Core/Misc/Limits.h"
+#include "Core/Misc/Utility.h"
+#include "Core/Misc/Tuple.h"
+#include "Core/Memory/SmartPointers.h"
 
-#include "Utils.h"
+#include "Core/Misc/Utils.h"

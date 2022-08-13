@@ -2,6 +2,13 @@
 
 #include <cstdint>
 
+// Note this is not <limits>, which contains std::numeric_limits! Instead it is a C header containing platform defines.
+#include <limits.h>
+
+// Initializer lists are a compiler feature, in spite of them being in the std namespace.
+// It is possible to provide a "custom" implementation, but it will be compiler specific and this beats the purpose of providing it.
+#include <initializer_list>
+
 using uint8   = uint8_t;
 using uint16  = uint16_t;
 using uint32  = uint32_t;

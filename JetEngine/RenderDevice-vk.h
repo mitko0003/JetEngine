@@ -24,19 +24,39 @@ private:
 	VkImageView Views[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
 };
 
+class TVulkanTexture final : public IGraphicsTexture
+{
+public:
+
+};
+
+class TVulkanBuffer final : public IGraphicsBuffer
+{
+public:
+	using IGraphicsBuffer::IGraphicsBuffer;
+	~TVulkanBuffer();
+
+	VkBuffer ResourceHandle;
+	VkDeviceMemory MemoryHandle;
+};
+
 class TVulkanAPI final : public IGraphicsAPI
 {
 public:
-	void Init(HINSTANCE instance, HWND hwnd) override;
+	void Init(const IWindow*) override;
 	void Done() override;
+
+	IGraphicsBuffer *CreateBuffer(int32 size) override;
 
 	void HelloWorld();
 
 private:
+	friend TVulkanBuffer;
+
 	void InitLib();
 	void InitInstance();
 	void InitDevice();
-	void InitBackBuffer(HINSTANCE instance, HWND hwnd);
+	void InitBackBuffer(const IWindow*);
 	void InitSwapChain();
 	void InitCommandPool();
 
@@ -58,10 +78,6 @@ private:
 	VkFramebuffer CreateFramebuffer(VkImageView imageView, VkRenderPass renderPass);
 	void DestroyFramebuffer(VkFramebuffer framebuffer);
 	void UploadVertexData(VkDeviceMemory deviceMemory);
-	VkBuffer CreateBuffer();
-	void DestroyBuffer(VkBuffer buffer);
-	VkDeviceMemory AllocateDeviceMemory(VkBuffer buffer);
-	void FreeDeviceMemory(VkDeviceMemory deviceMemory);
 	VkPipelineLayout CreatePipelineLayout();
 	void DestroyPipelineLayout(VkPipelineLayout pipelineLayout);
 	VkShaderModule CreateShaderModule(const uint32 *shader, uint32 size);

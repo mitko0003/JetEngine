@@ -4,20 +4,21 @@
 
 #define ASSERT(condition) do { if(!(condition)) { DebugPrint("%s(%d): %s", __FILE__, __LINE__, #condition); DebugBreak(); } } while (false)
 #define ALLOCA(type, size) static_cast<type*>(_alloca(sizeof(type) * size))
+#define STR_AND_LEN(str) str, sizeof(str) - 1
 
 using LibraryType = HMODULE;
 
 template <typename T>
 constexpr int32 ArrayLength(const T &arr) 
 {
-	static_assert(TIsArray_v<T>, "Non-array type!");
+	static_assert(IsArray<T>, "Non-array type!");
 	return sizeof(arr) / sizeof(arr[0]);
 }
 
 //template <class T>
 //void ZeroMemory(T &obj)
 //{
-//	memset(&obj, 0, sizeof(T));
+//	MemorySet(&obj, 0, sizeof(T));
 //}
 
 template <typename T, int32 _size>
@@ -94,7 +95,7 @@ private:
 //{
 //	String(const char *cStr)
 //	{
-//		memcpy(data, cStr, 2);
+//		MemCopy(data, cStr, 2);
 //	}
 //
 //	bool operator==(const String &rhs) const
